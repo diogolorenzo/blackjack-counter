@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* O CSS mora um nível abaixo do root do Vite; sem isto o scan perde os .tsx. */
+@source "../";
+
+@theme {
+  --color-bg: #0b0f14;
+  --color-surface: #121820;
+  --color-border: #1e2732;
+  --color-fg: #e6edf3;
+  --color-muted: #7d8896;
+  --color-pos: #34d399;
+  --color-neg: #f87171;
+  --color-warn: #fbbf24;
+  /* Já tem alfa embutido: usar sem modificador de opacidade. */
+  --color-overlay: rgba(11, 15, 20, 0.82);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+    cursor: default;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  body[data-window='overlay'] {
+    background-color: transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+}
+
+@layer components {
+  /* Obrigatório em todo número que muda: sem isto o layout treme a cada carta. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ui-label {
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+
+  /* Controle dentro da faixa de arrasto não recebe clique sem este reset. */
+  .app-no-drag,
+  .app-drag button,
+  .app-drag input,
+  .app-drag select,
+  .app-drag textarea,
+  .app-drag a {
+    -webkit-app-region: no-drag;
+  }
+}
