@@ -1,6 +1,29 @@
-import type { Bucket, Delta } from './types'
+import type { CurrencySettings, Delta, Bucket } from './types'
 
-const CURRENCY = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+/**
+ * Intl.NumberFormat é caro de construir e barato de reusar, e a formatação roda
+ * a cada snapshot. O cache é por (locale, moeda), que é o que o usuário muda.
+ */
+const currencyFormatters = new Map<string, Intl.NumberFormat>()
+
+function currencyFormatter(currency: CurrencySettings): Intl.NumberFormat {
+  const key = `${currency.locale}|${currency.code}`
+  const cached = currencyFormatters.get(key)
+  if (cached !== undefined) return cached
+
+  let formatter: Intl.NumberFormat
+  try {
+    formatter = new Intl.NumberFormat(currency.locale, {
+      style: 'currency',
+      currency: currency.code
+    })
+  } catch {
+    // Código ou locale inválido vindo do settings.json não pode derrubar a UI.
+    formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+  }
+  currencyFormatters.set(key, formatter)
+  return formatter
+}
 
 /** 3 -> "+3", 0 -> "0", -2 -> "-2". */
 export function formatSigned(n: number): string {
@@ -29,15 +52,50 @@ export function formatUnits(u: number): string {
   return Number.isInteger(u) ? `${u}u` : `${u.toFixed(1)}u`
 }
 
-export function formatCurrency(units: number, unitValue: number): string {
-  const total = units * unitValue
-  return CURRENCY.format(Number.isFinite(total) ? total : 0)
+export function formatMoney(amount: number, currency: CurrencySettings): string {
+  return currencyFormatter(currency).format(Number.isFinite(amount) ? amount : 0)
 }
 
-export function bucketLabel(b: Bucket): string {
-  if (b === 'low') return '2-6'
-  if (b === 'high') return '10-A'
-  return '7-9'
+export function formatCurrency(
+  units: number,
+  unitValue: number,
+  currency: CurrencySettings
+): string {
+  return formatMoney(units * unitValue, currency)
+}
+
+/** 1.25 -> "+1.25%". Pontos percentuais com sinal explícito. */
+export function formatPercent(pct: number, digits = 2): string {
+  if (!Number.isFinite(pct)) return '—'
+  const value = pct.toFixed(digits)
+  return pct > 0 ? `+${value}%` : `${value}%`
+}
+
+/** 0.043 -> "4.3%". Para frações que já são proporção (risco, frequência). */
+export function formatRatio(fraction: number, digits = 1): string {
+  if (!Number.isFinite(fraction)) return '—'
+  return `${(fraction * 100).toFixed(digits)}%`
+}
+
+/** 4500000 -> "1h 15m". Sempre a unidade maior + a seguinte. */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '0s'
+  const totalSeconds = Math.floor(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+/** 12345.6 -> "12.3k". Mãos de N0 chegam à casa dos milhões. */
+export function formatCompact(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (abs >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(Math.round(n))
 }
 
 export function deltaToBucket(d: Delta): Bucket {

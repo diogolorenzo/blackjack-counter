@@ -1,24 +1,29 @@
 import { join } from 'node:path'
 
 import { app } from 'electron'
-import type { BrowserWindow, Tray } from 'electron'
+import type { BrowserWindow } from 'electron'
 
 import { IPC_EVENTS } from '@shared/ipc'
 import type { AppSnapshot, HotkeyAction } from '@shared/types'
 
 import { HotkeyManager } from './hotkeys/manager'
 import { registerIpcHandlers } from './ipc/handlers'
+import { HistoryStore } from './state/historyStore'
 import { SessionController } from './state/sessionController'
+import { SessionStore } from './state/sessionStore'
 import { SettingsStore } from './state/store'
 import { createTray } from './tray'
+import type { TrayController } from './tray'
 import { createMainWindow, getMainWindow } from './windows/mainWindow'
 import { createOverlayController } from './windows/overlayWindow'
 import type { OverlayController } from './windows/overlayWindow'
 
 let store: SettingsStore | null = null
+let sessionStore: SessionStore | null = null
+let controllerRef: SessionController | null = null
 let hotkeys: HotkeyManager | null = null
 let overlay: OverlayController | null = null
-let tray: Tray | null = null
+let tray: TrayController | null = null
 
 function liveWindows(): BrowserWindow[] {
   const candidates = [getMainWindow(), overlay === null ? null : overlay.get()]
@@ -29,6 +34,7 @@ function liveWindows(): BrowserWindow[] {
 
 function broadcast(snapshot: AppSnapshot): void {
   for (const win of liveWindows()) win.webContents.send(IPC_EVENTS.stateChanged, snapshot)
+  tray?.update(snapshot)
 }
 
 function showMainWindow(): void {
@@ -39,7 +45,23 @@ function showMainWindow(): void {
   win.focus()
 }
 
-function handleHotkey(controller: SessionController, action: HotkeyAction): void {
+/** setVisible(true) já faz ensure + applyPlacement; a janela só nasce aqui. */
+function applyOverlayVisibility(controller: SessionController, visible: boolean): void {
+  controller.updateSettings({ overlay: { visible } })
+  overlay?.setVisible(visible)
+}
+
+function toggleHotkeys(controller: SessionController, manager: HotkeyManager): void {
+  const enabled = !controller.getSnapshot().settings.hotkeysEnabled
+  const settings = controller.updateSettings({ hotkeysEnabled: enabled }).settings
+  controller.setHotkeyStatus(manager.apply(settings.bindings, settings.hotkeysEnabled))
+}
+
+function handleHotkey(
+  controller: SessionController,
+  action: HotkeyAction,
+  toggleOverlay: () => void
+): void {
   switch (action) {
     case 'low':
       controller.apply(1)
@@ -53,26 +75,35 @@ function handleHotkey(controller: SessionController, action: HotkeyAction): void
     case 'undo':
       controller.undo()
       break
+    case 'redo':
+      controller.redo()
+      break
+    case 'newShoe':
+      controller.newShoe()
+      break
+    case 'toggleOverlay':
+      toggleOverlay()
+      break
   }
-}
-
-/** setVisible(true) já faz ensure + applyPlacement; a janela só nasce aqui. */
-function applyOverlayVisibility(controller: SessionController, visible: boolean): void {
-  controller.updateSettings({ overlay: { visible } })
-  overlay?.setVisible(visible)
 }
 
 function bootstrap(): void {
   // Agrupa janela e notificações sob o mesmo appId do electron-builder.
   app.setAppUserModelId('com.diogo.counter')
 
-  const settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
+  const userData = app.getPath('userData')
+  const settingsStore = new SettingsStore(join(userData, 'settings.json'))
+  const liveSession = new SessionStore(join(userData, 'session.json'))
+  const history = new HistoryStore(join(userData, 'history.json'))
   store = settingsStore
+  sessionStore = liveSession
 
-  const controller = new SessionController(settingsStore)
-
-  const hotkeyManager = new HotkeyManager((action) => handleHotkey(controller, action))
-  hotkeys = hotkeyManager
+  const controller = new SessionController({
+    settings: settingsStore,
+    session: liveSession,
+    history
+  })
+  controllerRef = controller
 
   const overlayController = createOverlayController(
     () => controller.getSnapshot().settings,
@@ -81,6 +112,15 @@ function bootstrap(): void {
     }
   )
   overlay = overlayController
+
+  const toggleOverlayVisibility = (): void => {
+    applyOverlayVisibility(controller, !controller.getSnapshot().settings.overlay.visible)
+  }
+
+  const hotkeyManager = new HotkeyManager((action) =>
+    handleHotkey(controller, action, toggleOverlayVisibility)
+  )
+  hotkeys = hotkeyManager
 
   createMainWindow()
 
@@ -99,9 +139,8 @@ function bootstrap(): void {
 
   tray = createTray({
     onShowMain: showMainWindow,
-    onToggleOverlay: () => {
-      applyOverlayVisibility(controller, !controller.getSnapshot().settings.overlay.visible)
-    },
+    onToggleOverlay: toggleOverlayVisibility,
+    onToggleHotkeys: () => toggleHotkeys(controller, hotkeyManager),
     onNewShoe: () => {
       controller.newShoe()
     },
@@ -109,6 +148,7 @@ function bootstrap(): void {
       app.quit()
     }
   })
+  tray.update(controller.getSnapshot())
 
   if (settings.overlay.visible) overlayController.setVisible(true)
 }
@@ -138,6 +178,13 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     hotkeys?.dispose()
     hotkeys = null
+
+    // O shoe em andamento primeiro: settings dá para refazer, contagem não.
+    controllerRef?.flush()
+    controllerRef = null
+
+    sessionStore?.dispose()
+    sessionStore = null
 
     store?.flush()
     store?.dispose()

@@ -6,7 +6,9 @@ import { HOTKEY_REPEAT_DEBOUNCE_MS } from '@shared/defaults'
 import type { HotkeyStatusMap } from '@shared/ipc'
 
 function allDisabled(): HotkeyStatusMap {
-  return { low: 'disabled', neutral: 'disabled', high: 'disabled', undo: 'disabled' }
+  const out = {} as HotkeyStatusMap
+  for (const action of HOTKEY_ACTIONS) out[action] = 'disabled'
+  return out
 }
 
 /**
@@ -73,6 +75,7 @@ export class HotkeyManager {
 
     const taken = new Set<string>()
     for (const action of HOTKEY_ACTIONS) {
+      // Ação opcional sem tecla: fica 'disabled' e não consome nada do sistema.
       const accelerator = (bindings[action] ?? '').trim()
       if (accelerator === '') continue
 

@@ -1,11 +1,17 @@
+import { useEffect } from 'react'
+
 import { DEFAULT_SETTINGS, OVERLAY_SIZES } from '@shared/defaults'
+import { formatCurrency, formatSigned, formatUnits } from '@shared/format'
 import { CARDS_PER_DECK } from '@shared/types'
 import type { Derived, Entry, OverlaySize } from '@shared/types'
+
 import { BetSuggestion } from '@/components/BetSuggestion'
 import { CountDisplay } from '@/components/CountDisplay'
 import { HistoryStrip } from '@/components/HistoryStrip'
 import { ShoeMeter } from '@/components/ShoeMeter'
+import { secondaryCount } from '@/countView'
 import { useCounterState } from '@/useCounterState'
+import { useFeedback } from '@/useFeedback'
 
 /**
  * Canvas fixo em que o layout é desenhado, depois reduzido/ampliado por `zoom`
@@ -16,13 +22,16 @@ import { useCounterState } from '@/useCounterState'
  * aos três: só o fator muda. `zoom` (e não `transform: scale`) porque ele entra
  * no layout — o texto continua rasterizado no tamanho final, sem borrar.
  *
- * O empilhamento dos quatro blocos mede ~150px; os 176 do canvas são folga
- * deliberada, que vira respiro nas bordas depois da escala. Sem essa redução o
- * tamanho `small` (116px de altura) cortaria metade do conteúdo — os componentes
- * têm tipografia fixa e não encolhem sozinhos.
+ * O empilhamento dos blocos mede ~160px; os 184 do canvas são folga deliberada,
+ * que vira respiro nas bordas depois da escala. Sem essa redução o tamanho
+ * `small` (116px de altura) cortaria metade do conteúdo — os componentes têm
+ * tipografia fixa e não encolhem sozinhos.
  */
 const DESIGN_WIDTH = 264
-const DESIGN_HEIGHT = 176
+const DESIGN_HEIGHT = 184
+
+/** O layout mínimo tem duas linhas só, então cabe num canvas bem mais baixo. */
+const MINIMAL_HEIGHT = 104
 
 /** Cabem ~10 chips em DESIGN_WIDTH; historyLength vai até 16 e transbordaria. */
 const MAX_OVERLAY_CHIPS = 9
@@ -32,21 +41,24 @@ const NO_ENTRIES: readonly Entry[] = []
 /** Primeiro frame: mesma estrutura, valores zerados — o layout não pode piscar. */
 const LOADING_DERIVED: Derived = {
   runningCount: 0,
+  rawCount: 0,
   cardsSeen: 0,
   totalCards: DEFAULT_SETTINGS.shoe.deckCount * CARDS_PER_DECK,
   cardsRemaining: DEFAULT_SETTINGS.shoe.deckCount * CARDS_PER_DECK,
   decksRemaining: DEFAULT_SETTINGS.shoe.deckCount,
   trueCountExact: 0,
-  trueCountForBets: 0,
+  decisionCount: 0,
   betUnits: 1,
+  advantagePct: null,
+  evPerHandUnits: null,
   insuranceOn: false,
   penetrationReached: false,
   shoeExhausted: false
 }
 
-function contentScale(size: OverlaySize): number {
+function contentScale(size: OverlaySize, designHeight: number): number {
   const { width, height } = OVERLAY_SIZES[size]
-  return Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT)
+  return Math.min(width / DESIGN_WIDTH, height / designHeight)
 }
 
 /**
@@ -70,15 +82,28 @@ export function OverlayApp() {
   const settings = snapshot?.settings ?? DEFAULT_SETTINGS
   const derived = snapshot?.derived ?? LOADING_DERIVED
   const entries = snapshot?.recentEntries ?? NO_ENTRIES
-  const { locked, size, historyLength, showCurrency } = settings.overlay
+  const { locked, size, layout, opacity, historyLength, showCurrency } = settings.overlay
+
+  // Escondido, o overlay continua vivo como janela: sem esta condição o tick
+  // sairia duas vezes, uma aqui e outra na janela principal.
+  const { pulsing } = useFeedback(snapshot, { playSound: settings.overlay.visible })
+
+  useEffect(() => {
+    document.body.dataset.palette = settings.palette
+  }, [settings.palette])
+
+  const secondary = secondaryCount(derived)
+  const minimal = layout === 'minimal'
+  const designHeight = minimal ? MINIMAL_HEIGHT : DESIGN_HEIGHT
 
   return (
     <div
+      style={{ ['--overlay-alpha' as string]: String(opacity) }}
       className={`relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] border bg-overlay backdrop-blur-md transition-colors duration-100 ${edgeTone(
         locked,
         derived.insuranceOn,
         derived.shoeExhausted
-      )} ${locked ? '' : 'app-drag cursor-move'}`}
+      )} ${locked ? '' : 'app-drag cursor-move'} ${pulsing ? 'counter-pulse' : ''}`}
     >
       {!locked && (
         <span
@@ -89,33 +114,73 @@ export function OverlayApp() {
 
       <div
         className="flex flex-col gap-1 p-2"
-        style={{ width: DESIGN_WIDTH, zoom: contentScale(size) }}
+        style={{ width: DESIGN_WIDTH, zoom: contentScale(size, designHeight) }}
       >
-        <CountDisplay
-          runningCount={derived.runningCount}
-          trueCount={derived.trueCountExact}
-          compact
-        />
-        <ShoeMeter
-          cardsSeen={derived.cardsSeen}
-          totalCards={derived.totalCards}
-          decksRemaining={derived.decksRemaining}
-          penetration={settings.shoe.penetration}
-          penetrationReached={derived.penetrationReached}
-          compact
-        />
-        <BetSuggestion
-          units={derived.betUnits}
-          unitValue={settings.unitValue}
-          showCurrency={showCurrency}
-          insuranceOn={derived.insuranceOn}
-          compact
-        />
-        <HistoryStrip
-          entries={entries}
-          limit={Math.min(historyLength, MAX_OVERLAY_CHIPS)}
-          compact
-        />
+        {minimal ? (
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="ui-label text-[9px]">{secondary.label}</span>
+              <span
+                className={`tnum text-[46px] font-semibold leading-none tracking-tight ${
+                  secondary.tone >= 2 ? 'text-pos' : secondary.tone <= -1 ? 'text-neg' : 'text-fg'
+                }`}
+              >
+                {secondary.value}
+              </span>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <span className="ui-label text-[9px]">
+                {derived.insuranceOn ? 'Insurance' : 'Bet'}
+              </span>
+              <span
+                className={`tnum text-[30px] font-semibold leading-none tracking-tight ${
+                  derived.insuranceOn ? 'text-warn' : 'text-fg'
+                }`}
+              >
+                {showCurrency
+                  ? formatCurrency(derived.betUnits, settings.unitValue, settings.currency)
+                  : formatUnits(derived.betUnits)}
+              </span>
+              <span className="tnum text-[10px] text-muted">
+                RC {formatSigned(derived.runningCount)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <CountDisplay
+              runningCount={derived.runningCount}
+              secondaryLabel={secondary.label}
+              secondaryValue={secondary.value}
+              secondaryTone={secondary.tone}
+              advantagePct={derived.advantagePct}
+              compact
+            />
+            <ShoeMeter
+              cardsSeen={derived.cardsSeen}
+              totalCards={derived.totalCards}
+              decksRemaining={derived.decksRemaining}
+              penetration={settings.shoe.penetration}
+              penetrationReached={derived.penetrationReached}
+              compact
+            />
+            <BetSuggestion
+              units={derived.betUnits}
+              unitValue={settings.unitValue}
+              currency={settings.currency}
+              showCurrency={showCurrency}
+              insuranceOn={derived.insuranceOn}
+              evPerHandUnits={derived.evPerHandUnits}
+              compact
+            />
+            <HistoryStrip
+              entries={entries}
+              limit={Math.min(historyLength, MAX_OVERLAY_CHIPS)}
+              system={settings.shoe.system}
+              compact
+            />
+          </>
+        )}
       </div>
     </div>
   )

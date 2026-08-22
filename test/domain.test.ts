@@ -4,7 +4,6 @@ import { CountingSession } from '../src/shared/domain/session'
 import { computeDerived } from '../src/shared/domain/shoe'
 import { lookupUnits, validateBetSpread } from '../src/shared/domain/betSpread'
 import {
-  bucketLabel,
   bucketToDelta,
   deltaToBucket,
   formatCurrency,
@@ -13,6 +12,7 @@ import {
   formatTrueCount,
   formatUnits
 } from '../src/shared/format'
+import { bucketRankLabel } from '../src/shared/domain/system'
 import { BET_SPREAD_FLOOR, DEFAULT_BET_SPREAD, DEFAULT_SETTINGS } from '../src/shared/defaults'
 import type { Delta, Entry, ShoeConfig } from '../src/shared/types'
 import { CARDS_PER_DECK } from '../src/shared/types'
@@ -27,6 +27,8 @@ function entry(delta: Delta): Entry {
 function cards(delta: Delta, times: number): Entry[] {
   return Array.from({ length: times }, () => entry(delta))
 }
+
+const BRL = { code: 'BRL', locale: 'pt-BR' }
 
 function shoeConfig(patch: Partial<ShoeConfig> = {}): ShoeConfig {
   return { ...DEFAULT_SETTINGS.shoe, ...patch }
@@ -54,7 +56,7 @@ describe('computeDerived / Hi-Lo', () => {
     expect(d.cardsRemaining).toBe(306)
     expect(d.decksRemaining).toBeCloseTo(306 / CARDS_PER_DECK, 10)
     expect(d.trueCountExact).toBeCloseTo(0.3399, 4)
-    expect(d.trueCountForBets).toBe(0)
+    expect(d.decisionCount).toBe(0)
     expect(d.betUnits).toBe(1)
     expect(d.insuranceOn).toBe(false)
     expect(d.shoeExhausted).toBe(false)
@@ -71,7 +73,7 @@ describe('computeDerived / Hi-Lo', () => {
     expect(d.cardsRemaining).toBe(0)
     expect(d.shoeExhausted).toBe(true)
     expect(d.trueCountExact).toBe(0)
-    expect(d.trueCountForBets).toBe(0)
+    expect(d.decisionCount).toBe(0)
     expect(d.betUnits).toBe(1)
   })
 
@@ -84,7 +86,7 @@ describe('computeDerived / Hi-Lo', () => {
     expect(floored.runningCount).toBe(-3)
     expect(floored.decksRemaining).toBe(2.5)
     expect(floored.trueCountExact).toBeCloseTo(-1.2, 10)
-    expect(floored.trueCountForBets).toBe(-2)
+    expect(floored.decisionCount).toBe(-2)
     expect(floored.betUnits).toBe(1)
 
     const nearest = computeDerived(
@@ -92,7 +94,7 @@ describe('computeDerived / Hi-Lo', () => {
       shoeConfig({ deckCount: 4, trueCountRounding: 'nearest' }),
       DEFAULT_BET_SPREAD
     )
-    expect(nearest.trueCountForBets).toBe(-1)
+    expect(nearest.decisionCount).toBe(-1)
   })
 
   it('mantém o true count finito no fim do shoe graças ao clamp de minDecksRemaining', () => {
@@ -104,7 +106,7 @@ describe('computeDerived / Hi-Lo', () => {
     expect(near.cardsRemaining).toBe(1)
     expect(near.decksRemaining).toBe(0.25)
     expect(near.trueCountExact).toBe(20)
-    expect(near.trueCountForBets).toBe(20)
+    expect(near.decisionCount).toBe(20)
     expect(near.betUnits).toBe(12)
     expect(near.insuranceOn).toBe(true)
 
@@ -125,7 +127,7 @@ describe('computeDerived / Hi-Lo', () => {
 
     expect(d.cardsRemaining).toBe(0)
     expect(Number.isFinite(d.trueCountExact)).toBe(true)
-    expect(Number.isFinite(d.trueCountForBets)).toBe(true)
+    expect(Number.isFinite(d.decisionCount)).toBe(true)
     expect(d.decksRemaining).toBeGreaterThan(0)
   })
 
@@ -150,11 +152,11 @@ describe('computeDerived / Hi-Lo', () => {
     const tcThree = [...cards(1, 33), ...cards(0, 1), ...cards(-1, 18)]
 
     const below = computeDerived(tcTwo, shoeConfig({ deckCount: 6 }), DEFAULT_BET_SPREAD)
-    expect(below.trueCountForBets).toBe(2)
+    expect(below.decisionCount).toBe(2)
     expect(below.insuranceOn).toBe(false)
 
     const at = computeDerived(tcThree, shoeConfig({ deckCount: 6 }), DEFAULT_BET_SPREAD)
-    expect(at.trueCountForBets).toBe(3)
+    expect(at.decisionCount).toBe(3)
     expect(at.insuranceOn).toBe(true)
   })
 })
@@ -352,7 +354,7 @@ describe('validateBetSpread', () => {
     ])
 
     expect(result.ok).toBe(false)
-    expect(result.errors.some((e) => e.includes('duplicado'))).toBe(true)
+    expect(result.errors.some((e) => e.includes('duplicada'))).toBe(true)
     expect(result.normalized).toEqual([
       { minTrueCount: 2, units: 2 },
       { minTrueCount: BET_SPREAD_FLOOR, units: 1 }
@@ -411,9 +413,9 @@ describe('format', () => {
     // O Intl separa o símbolo com espaço não quebrável, e o code point varia com a versão do ICU.
     const normalize = (s: string): string => s.replace(/[  ]/g, ' ')
 
-    expect(normalize(formatCurrency(4, 25))).toBe('R$ 100,00')
-    expect(normalize(formatCurrency(0, 25))).toBe('R$ 0,00')
-    expect(normalize(formatCurrency(12, 2.5))).toBe('R$ 30,00')
+    expect(normalize(formatCurrency(4, 25, BRL))).toBe('R$ 100,00')
+    expect(normalize(formatCurrency(0, 25, BRL))).toBe('R$ 0,00')
+    expect(normalize(formatCurrency(12, 2.5, BRL))).toBe('R$ 30,00')
   })
 
   it('converte delta e bucket nos dois sentidos', () => {
@@ -430,9 +432,14 @@ describe('format', () => {
     }
   })
 
-  it('rotula os buckets com as cartas de cada faixa', () => {
-    expect(bucketLabel('low')).toBe('2-6')
-    expect(bucketLabel('neutral')).toBe('7-9')
-    expect(bucketLabel('high')).toBe('10-A')
+  it('rotula os buckets com as cartas de cada faixa, por sistema', () => {
+    expect(bucketRankLabel('hilo', 'low')).toBe('2-6')
+    expect(bucketRankLabel('hilo', 'neutral')).toBe('7-9')
+    expect(bucketRankLabel('hilo', 'high')).toBe('10-A')
+
+    // No KO o 7 muda de lado, e é só isso que separa os dois sistemas.
+    expect(bucketRankLabel('ko', 'low')).toBe('2-7')
+    expect(bucketRankLabel('ko', 'neutral')).toBe('8-9')
+    expect(bucketRankLabel('ko', 'high')).toBe('10-A')
   })
 })

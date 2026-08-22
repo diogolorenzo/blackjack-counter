@@ -6,15 +6,16 @@ function isFiniteNumber(value: unknown): boolean {
 }
 
 /**
- * Unidades para o true count dado: a regra de maior minTrueCount que ainda seja
- * <= trueCount. Equivale a ordenar decrescente e pegar a primeira que casa, sem
- * alocar — isto roda a cada snapshot.
+ * Unidades para o número de decisão dado (true count no Hi-Lo, running count no
+ * KO): a regra de maior minTrueCount que ainda seja <= o número. Equivale a
+ * ordenar decrescente e pegar a primeira que casa, sem alocar — isto roda a
+ * cada snapshot.
  */
-export function lookupUnits(trueCount: number, spread: readonly BetSpreadRule[]): number {
+export function lookupUnits(count: number, spread: readonly BetSpreadRule[]): number {
   let match: BetSpreadRule | undefined
   for (const rule of spread) {
     if (!isFiniteNumber(rule?.minTrueCount)) continue
-    if (rule.minTrueCount > trueCount) continue
+    if (rule.minTrueCount > count) continue
     if (match === undefined || rule.minTrueCount > match.minTrueCount) match = rule
   }
   return match === undefined ? 1 : match.units
@@ -25,9 +26,12 @@ export function lookupUnits(trueCount: number, spread: readonly BetSpreadRule[])
  *
  * `normalized` é SEMPRE utilizável: ordenado decrescente e com uma regra de piso
  * garantida, para que lookupUnits nunca caia no fallback. Entrada irrecuperável
- * vira DEFAULT_BET_SPREAD.
+ * vira o `fallback` (o spread padrão do sistema em questão).
  */
-export function validateBetSpread(rules: readonly BetSpreadRule[]): {
+export function validateBetSpread(
+  rules: readonly BetSpreadRule[],
+  fallback: readonly BetSpreadRule[] = DEFAULT_BET_SPREAD
+): {
   ok: boolean
   errors: string[]
   normalized: BetSpreadRule[]
@@ -44,15 +48,15 @@ export function validateBetSpread(rules: readonly BetSpreadRule[]): {
       const units = rule?.units
 
       if (!isFiniteNumber(minTrueCount)) {
-        errors.push(`minTrueCount inválido: ${String(minTrueCount)}.`)
+        errors.push(`Contagem mínima inválida: ${String(minTrueCount)}.`)
         continue
       }
       if (!isFiniteNumber(units) || units <= 0) {
-        errors.push(`units precisa ser um número finito maior que zero (TC ${minTrueCount}).`)
+        errors.push(`units precisa ser um número finito maior que zero (contagem ${minTrueCount}).`)
         continue
       }
       if (seen.has(minTrueCount)) {
-        errors.push(`minTrueCount duplicado: ${minTrueCount}.`)
+        errors.push(`Contagem mínima duplicada: ${minTrueCount}.`)
         continue
       }
 
@@ -62,7 +66,7 @@ export function validateBetSpread(rules: readonly BetSpreadRule[]): {
   }
 
   if (usable.length === 0) {
-    return { ok: false, errors, normalized: DEFAULT_BET_SPREAD.map((r) => ({ ...r })) }
+    return { ok: false, errors, normalized: fallback.map((rule) => ({ ...rule })) }
   }
 
   const normalized = usable.sort((a, b) => b.minTrueCount - a.minTrueCount)

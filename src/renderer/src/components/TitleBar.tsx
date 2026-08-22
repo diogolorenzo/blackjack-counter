@@ -1,6 +1,6 @@
 export interface TitleBarProps {
-  settingsOpen: boolean
-  onToggleSettings: () => void
+  /** Rótulo curto do sistema ativo, ex: "Hi-Lo". Fica ao lado do nome do app. */
+  systemLabel: string
 }
 
 const CONTROL_CLASS =
@@ -11,21 +11,10 @@ const CONTROL_CLASS =
  * arrastada. Os botões voltam a receber clique pela regra .app-drag button
  * (no-drag) definida em styles.css.
  */
-export function TitleBar({ settingsOpen, onToggleSettings }: TitleBarProps) {
+export function TitleBar({ systemLabel }: TitleBarProps) {
   return (
     <header className="app-drag flex h-8 shrink-0 items-center border-b border-border bg-surface">
-      <span className="ui-label flex-1 truncate pl-3">Counter</span>
-
-      <button
-        type="button"
-        onClick={onToggleSettings}
-        aria-pressed={settingsOpen}
-        className={`mr-1 rounded px-2 py-1 text-[11px] transition-colors duration-100 ${
-          settingsOpen ? 'text-fg' : 'text-muted hover:text-fg'
-        }`}
-      >
-        {settingsOpen ? 'Voltar' : 'Ajustes'}
-      </button>
+      <span className="ui-label flex-1 truncate pl-3">Counter · {systemLabel}</span>
 
       <button
         type="button"

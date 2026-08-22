@@ -16,12 +16,16 @@ const api: CounterApi = {
   undo: () => ipcRenderer.invoke(IPC.countUndo),
   redo: () => ipcRenderer.invoke(IPC.countRedo),
   newShoe: () => ipcRenderer.invoke(IPC.countNewShoe),
+  acknowledgeRestore: () => ipcRenderer.invoke(IPC.sessionAcknowledgeRestore),
+  startSession: () => ipcRenderer.invoke(IPC.sessionStart),
+  endSession: () => ipcRenderer.invoke(IPC.sessionEnd),
 
   getSettings: () => ipcRenderer.invoke(IPC.settingsGet),
   updateSettings: (patch) => ipcRenderer.invoke(IPC.settingsUpdate, patch),
 
   setBinding: (action, accelerator) =>
     ipcRenderer.invoke(IPC.hotkeysSetBinding, action, accelerator),
+  clearBinding: (action) => ipcRenderer.invoke(IPC.hotkeysClearBinding, action),
   setCaptureMode: (capturing) => ipcRenderer.invoke(IPC.hotkeysSetCaptureMode, capturing),
   setHotkeysEnabled: (enabled) => ipcRenderer.invoke(IPC.hotkeysSetEnabled, enabled),
 
@@ -29,6 +33,12 @@ const api: CounterApi = {
   setOverlayLocked: (locked) => ipcRenderer.invoke(IPC.overlaySetLocked, locked),
   setOverlayCorner: (corner, margin) => ipcRenderer.invoke(IPC.overlaySetCorner, corner, margin),
   setOverlaySize: (size) => ipcRenderer.invoke(IPC.overlaySetSize, size),
+
+  getHistory: () => ipcRenderer.invoke(IPC.historyGet),
+  setShoeResult: (id, result) => ipcRenderer.invoke(IPC.historySetResult, id, result),
+  clearHistory: () => ipcRenderer.invoke(IPC.historyClear),
+
+  simulateRisk: () => ipcRenderer.invoke(IPC.riskSimulate),
 
   reportNumLock: (on) => ipcRenderer.invoke(IPC.numLockReport, on),
 

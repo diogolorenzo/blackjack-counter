@@ -6,6 +6,8 @@ import type { BetSpreadRule } from '@shared/types'
 
 export interface BetSpreadEditorProps {
   rules: readonly BetSpreadRule[]
+  /** "True count" no Hi-Lo, "Running count" no KO — a escala muda com o sistema. */
+  countLabel: string
   onChange: (rules: BetSpreadRule[]) => void
 }
 
@@ -49,7 +51,7 @@ function parseDraft(draft: readonly DraftRule[]): BetSpreadRule[] {
  * a cada tecla, porque validateBetSpread reordena as regras — reordenar embaixo
  * do cursor tiraria o foco do campo no meio da digitação.
  */
-export function BetSpreadEditor({ rules, onChange }: BetSpreadEditorProps) {
+export function BetSpreadEditor({ rules, countLabel, onChange }: BetSpreadEditorProps) {
   const incoming = signature(rules)
   const [applied, setApplied] = useState(incoming)
   const [draft, setDraft] = useState<DraftRule[]>(() => toDraft(rules))
@@ -104,7 +106,7 @@ export function BetSpreadEditor({ rules, onChange }: BetSpreadEditorProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="ui-label flex items-center justify-between gap-2">
-        <span>True count</span>
+        <span>{countLabel}</span>
         <span>Unidades</span>
       </div>
 
@@ -125,7 +127,7 @@ export function BetSpreadEditor({ rules, onChange }: BetSpreadEditorProps) {
                   step={1}
                   className={INPUT_CLASS}
                   value={row.minTrueCount}
-                  aria-label="True count mínimo"
+                  aria-label={`${countLabel} mínimo`}
                   onChange={(event) => editRow(row.key, 'minTrueCount', event.target.value)}
                   onBlur={() => commit(draft)}
                   onKeyDown={(event) => {

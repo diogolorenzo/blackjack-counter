@@ -30,7 +30,11 @@ export function createMainWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      // O tick de confirmação nasce de uma hotkey global, não de um clique na
+      // janela: com a política padrão o AudioContext ficaria suspenso para
+      // sempre e o som nunca sairia.
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
 

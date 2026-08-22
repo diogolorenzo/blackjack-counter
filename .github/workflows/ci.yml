@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Um push novo no mesmo branch cancela o anterior: o resultado do commit
+# intermediário não interessa e a fila de runners do Windows é lenta.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    # Windows porque é o alvo do app: o overlay, as hotkeys globais e a escrita
+    # atômica de settings são todos comportamento do Windows.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Testes
+        run: npm test
+
+      # `build` roda o typecheck dos dois projetos antes de empacotar, então
+      # cobre main/preload e renderer de uma vez.
+      - name: Typecheck e bundle
+        run: npm run build
