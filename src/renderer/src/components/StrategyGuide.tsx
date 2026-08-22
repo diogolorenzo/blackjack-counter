@@ -71,7 +71,21 @@ export function StrategyGuide({
     [pool, decisionCount]
   )
   const active = sorted.filter((item) => isDeviationActive(item, decisionCount))
-  const shown = active.slice(0, maxRows)
+
+  /**
+   * A linha "+N mais" é uma linha como as outras: mesmo `li`, mesmo gap, mesma
+   * altura. `maxRows` é o total de vagas que cabem na janela, então quando a
+   * lista trunca ela DISPUTA uma dessas vagas em vez de ser desenhada por cima
+   * do orçamento. Sem isso quem paga é o bloco "Próximo", que renderiza depois
+   * e some inteiro no overflow-hidden — e ele é justamente uma das duas coisas
+   * que o guia existe para mostrar.
+   *
+   * Sem truncamento nada é reservado: a vaga só é cobrada quando é usada.
+   * `Math.max(1, ...)` cobre o degenerado de `maxRows` valer 1, onde não há
+   * vaga para ceder e mostrar um desvio ainda é melhor que mostrar nenhum.
+   */
+  const truncated = active.length > maxRows
+  const shown = active.slice(0, truncated ? Math.max(1, maxRows - 1) : maxRows)
   const hidden = active.length - shown.length
   const next = sorted.find((item) => !isDeviationActive(item, decisionCount)) ?? null
 

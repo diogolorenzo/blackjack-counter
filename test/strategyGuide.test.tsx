@@ -40,10 +40,13 @@ describe('StrategyGuide', () => {
    * livro velho, e é o mais caro de esquecer agora. Em TC 5 os dois de índice
    * 5 são "10,10 vs 5" e "16 vs 9"; "16 vs 10" é índice 0 (ativou há muito
    * tempo) e tem que ser o primeiro a sair quando a janela aperta.
+   *
+   * maxRows={3} para sobrarem 2 desvios: a terceira vaga vai para a linha
+   * "+N mais", que é uma linha como as outras.
    */
   it('ao truncar, mantém os índices que viraram mais recentemente', () => {
     render(
-      <StrategyGuide system="hilo" decisionCount={5} insuranceOn surrender maxRows={2} />
+      <StrategyGuide system="hilo" decisionCount={5} insuranceOn surrender maxRows={3} />
     )
     const rows = screen.getAllByTestId('deviation-row').map((row) => row.textContent ?? '')
     expect(rows).toHaveLength(2)
@@ -71,12 +74,27 @@ describe('StrategyGuide', () => {
     expect(screen.getByTestId('insurance').textContent).toContain('fazer seguro')
   })
 
-  it('trunca a lista em maxRows e diz quantos sobraram', () => {
+  /**
+   * A linha "+N mais" ocupa uma vaga de linha, não um espaço extra: com 4 vagas
+   * e mais desvios do que isso, saem 3 desvios e o aviso. Contar 4 desvios MAIS
+   * o aviso empurraria o bloco "Próximo" para fora do overflow-hidden.
+   */
+  it('ao truncar, a linha "+N mais" toma uma das vagas', () => {
     render(
       <StrategyGuide system="hilo" decisionCount={9} insuranceOn surrender maxRows={4} />
     )
-    expect(screen.getAllByTestId('deviation-row')).toHaveLength(4)
+    expect(screen.getAllByTestId('deviation-row')).toHaveLength(3)
     expect(screen.getByText(/\+\d+ mais/)).toBeTruthy()
+  })
+
+  /** Sem truncamento a vaga não é cobrada: as 30 vagas são todas de desvio. */
+  it('sem truncar, nenhuma vaga é reservada para o aviso', () => {
+    render(
+      <StrategyGuide system="hilo" decisionCount={9} insuranceOn surrender maxRows={30} />
+    )
+    const rows = screen.getAllByTestId('deviation-row')
+    expect(rows.length).toBeGreaterThan(4)
+    expect(screen.queryByText(/\+\d+ mais/)).toBeNull()
   })
 
   /**
