@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-import { DEFAULT_SETTINGS } from '@shared/defaults'
+import { DEFAULT_SETTINGS, STRATEGY_MATRIX_CANVAS } from '@shared/defaults'
 
 import { ResizeGrip } from '@/components/ResizeGrip'
 import { StrategyGrid } from '@/components/StrategyGrid'
@@ -14,9 +14,13 @@ const GUIDE_WIDTH = 220
 const GUIDE_CHROME = 74
 const GUIDE_ROW_HEIGHT = 15
 
-/** A matriz tem tamanho intrínseco: o canvas é o do chart completo. */
-const MATRIX_WIDTH = 268
-const MATRIX_HEIGHT = 372
+/**
+ * A moldura arredondada tem 1px de borda de cada lado, e ela fica FORA do
+ * elemento com `zoom`: o espaço de desenho é a janela menos 2px em cada eixo.
+ * Sem descontar, o preset `medium` da matriz — que é o canvas em escala 1,0 —
+ * transbordaria exatamente a espessura da borda.
+ */
+const CARD_BORDER = 2
 
 export function StrategyOverlayApp() {
   const { snapshot } = useCounterState()
@@ -29,17 +33,23 @@ export function StrategyOverlayApp() {
     document.body.dataset.palette = settings.palette
   }, [settings.palette])
 
+  const availableWidth = Math.max(1, windowSize.width - CARD_BORDER)
+  const availableHeight = Math.max(1, windowSize.height - CARD_BORDER)
+
   const matrix = layout === 'matrix'
-  const designWidth = matrix ? MATRIX_WIDTH : GUIDE_WIDTH
+  const designWidth = matrix ? STRATEGY_MATRIX_CANVAS.width : GUIDE_WIDTH
   const scale = matrix
-    ? Math.min(windowSize.width / MATRIX_WIDTH, windowSize.height / MATRIX_HEIGHT)
-    : windowSize.width / GUIDE_WIDTH
+    ? Math.min(
+        availableWidth / STRATEGY_MATRIX_CANVAS.width,
+        availableHeight / STRATEGY_MATRIX_CANVAS.height
+      )
+    : availableWidth / GUIDE_WIDTH
 
   // Quantas linhas cabem sai da altura REAL, não do preset: uma regra só serve
   // aos três presets e a qualquer tamanho arrastado.
   const maxRows = Math.max(
     1,
-    Math.floor((windowSize.height / scale - GUIDE_CHROME) / GUIDE_ROW_HEIGHT)
+    Math.floor((availableHeight / scale - GUIDE_CHROME) / GUIDE_ROW_HEIGHT)
   )
 
   return (

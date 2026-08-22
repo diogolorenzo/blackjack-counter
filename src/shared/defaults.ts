@@ -162,9 +162,36 @@ export const OVERLAY_SIZES: Record<OverlaySize, { width: number; height: number 
 }
 
 /**
+ * Tamanho intrínseco do chart completo (StrategyGrid em modo compact), em px de
+ * canvas — o que o overlay de matriz escala por `zoom` até caber na janela.
+ *
+ * MEDIDO, não estimado: Chromium do Electron 43 no Windows, sobre o CSS
+ * compilado deste projeto. A tabela empilha 31 linhas — 1 de cabeçalho (10px),
+ * 3 de grupo (24,5px = pt-1.5 + linha de 16,5 + pb-0.5) e 27 de mão (16,5px,
+ * mandadas pelo line-height 1.5 do th, não pelo h-4 do botão) — mais 32
+ * espaçamentos de border-spacing 1px, o que dá 561px de tabela; com o p-2 do
+ * wrapper fecha em 577.
+ *
+ * 577 é o PIOR caso, que é o que importa aqui: em escala de tela fracionária
+ * (125%, 150%) o border-spacing encolhe por snapping de pixel de dispositivo e
+ * a tabela mede alguns px a menos.
+ *
+ * Mora aqui, e não no renderer, porque é ele que dita a proporção de
+ * STRATEGY_OVERLAY_SIZES.matrix: preset mais baixo que 577/268 da própria
+ * largura corta o chart embaixo, e como o contêiner é overflow-hidden o corte
+ * não deixa nenhum sinal na tela.
+ */
+export const STRATEGY_MATRIX_CANVAS: Size = { width: 268, height: 577 }
+
+/**
  * Tabela própria do overlay de jogada, indexada por layout: guia e matriz têm
  * proporções incomparáveis (uma lista de 6 linhas contra um chart de 27 linhas
  * por 10 colunas), então um único conjunto de presets serviria mal aos dois.
+ *
+ * Os presets de matriz seguem a proporção de STRATEGY_MATRIX_CANVAS (~2,15x
+ * mais altos que largos), senão o chart é cortado em silêncio. `medium` é o
+ * canvas em tamanho natural (escala 1,0, célula em 11px); small e large mantêm
+ * o mesmo passo de escala dos presets de guia (~0,84x e ~1,18x).
  */
 export const STRATEGY_OVERLAY_SIZES: Record<StrategyOverlayLayout, Record<OverlaySize, Size>> = {
   guide: {
@@ -173,9 +200,9 @@ export const STRATEGY_OVERLAY_SIZES: Record<StrategyOverlayLayout, Record<Overla
     large: { width: 290, height: 190 }
   },
   matrix: {
-    small: { width: 244, height: 334 },
-    medium: { width: 292, height: 400 },
-    large: { width: 344, height: 470 }
+    small: { width: 224, height: 483 },
+    medium: { width: 268, height: 577 },
+    large: { width: 316, height: 681 }
   }
 }
 
@@ -184,6 +211,11 @@ export const STRATEGY_OVERLAY_SIZES: Record<StrategyOverlayLayout, Record<Overla
  *
  * O piso não é estético: sem ele dá para encolher a janela até a própria alça
  * sumir, e aí o overlay fica num tamanho do qual não se sai mais pelo mouse.
+ *
+ * No piso da matriz a altura acompanha a proporção de STRATEGY_MATRIX_CANVAS
+ * pelo mesmo motivo dos presets: um piso mais baixo permitiria parar o arrasto
+ * num tamanho que corta o chart. O teto pode fugir da proporção à vontade — daí
+ * só sobra margem em volta do chart, nunca corte.
  */
 export const OVERLAY_SIZE_LIMITS: Record<
   'count' | 'strategyGuide' | 'strategyMatrix',
@@ -191,7 +223,7 @@ export const OVERLAY_SIZE_LIMITS: Record<
 > = {
   count: { min: { width: 150, height: 92 }, max: { width: 560, height: 340 } },
   strategyGuide: { min: { width: 170, height: 105 }, max: { width: 520, height: 420 } },
-  strategyMatrix: { min: { width: 210, height: 288 }, max: { width: 620, height: 840 } }
+  strategyMatrix: { min: { width: 210, height: 453 }, max: { width: 620, height: 840 } }
 }
 
 /**

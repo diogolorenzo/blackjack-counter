@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { clampOverlaySize, effectiveOverlaySize } from '../src/shared/domain/overlaySize'
-import { OVERLAY_SIZE_LIMITS, OVERLAY_SIZES, STRATEGY_OVERLAY_SIZES } from '../src/shared/defaults'
+import {
+  OVERLAY_SIZE_LIMITS,
+  OVERLAY_SIZES,
+  STRATEGY_MATRIX_CANVAS,
+  STRATEGY_OVERLAY_SIZES
+} from '../src/shared/defaults'
 
 const limits = { min: { width: 100, height: 80 }, max: { width: 400, height: 300 } }
 const bigArea = { width: 1920, height: 1040 }
@@ -119,6 +124,30 @@ describe('tabelas de tamanho', () => {
         expect(size.width).toBeLessThanOrEqual(max.width)
         expect(size.height).toBeLessThanOrEqual(max.height)
       }
+    }
+  })
+
+  /**
+   * O teste acima confere preset contra LIMITE; este confere preset contra
+   * CONTEÚDO, que é a relação que o jsdom nunca vai pegar — ele não faz layout
+   * e não aplica o Tailwind compilado.
+   *
+   * O overlay de matriz escala o chart por `min(largura/canvas, altura/canvas)`
+   * dentro de um contêiner overflow-hidden. Enquanto a janela for pelo menos
+   * tão esguia quanto o canvas, a escala é ditada pela largura e a altura sobra;
+   * uma janela mais achatada que isso corta o chart embaixo — sem barra de
+   * rolagem, sem "+N mais", sem nada. Foi assim que o bloco "Par" inteiro sumiu.
+   */
+  it('todo preset de matriz é alto o bastante para o chart inteiro caber', () => {
+    const { width: canvasWidth, height: canvasHeight } = STRATEGY_MATRIX_CANVAS
+    const sizes = [
+      ...Object.values(STRATEGY_OVERLAY_SIZES.matrix),
+      // O piso do arrasto vale a mesma regra: dá para parar o mouse nele.
+      OVERLAY_SIZE_LIMITS.strategyMatrix.min
+    ]
+
+    for (const size of sizes) {
+      expect(size.height).toBeGreaterThanOrEqual(canvasHeight * (size.width / canvasWidth))
     }
   })
 })
