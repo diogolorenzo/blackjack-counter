@@ -34,6 +34,15 @@ interface Point {
 }
 
 /**
+ * Espera entre o último passo do arrasto e a gravação do tamanho.
+ *
+ * A alça chama `resizeTo` a cada mousemove. Gravar em todas as chamadas custaria
+ * um broadcast de snapshot por frame para todas as janelas vivas, e só o tamanho
+ * em que o gesto parou interessa — é ele que sobra depois desta espera.
+ */
+const RESIZE_PERSIST_DELAY_MS = 220
+
+/**
  * Mantém a janela inteira dentro da workArea informada.
  *
  * É o que impede o overlay de sumir para sempre: uma customPosition gravada num
@@ -87,6 +96,27 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
   /** Últimos bounds escritos por nós, para distinguir eco de gesto do usuário. */
   let placedAt: Point | null = null
   let placedSize: Size | null = null
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+  function cancelPersist(): void {
+    if (persistTimer === null) return
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+
+  /**
+   * `resizeTo` escreve exatamente o tamanho que acabou de guardar em placedSize,
+   * então o evento 'resized' que vem depois é sempre eco e a guarda o descarta.
+   * Sem esta gravação explícita o tamanho arrastado nunca chegaria às settings e
+   * se perderia no próximo applyPlacement.
+   */
+  function schedulePersist(size: Size): void {
+    cancelPersist()
+    persistTimer = setTimeout(() => {
+      persistTimer = null
+      spec.onResized(size)
+    }, RESIZE_PERSIST_DELAY_MS)
+  }
 
   function alive(): BrowserWindow | null {
     if (win === null || win.isDestroyed()) return null
@@ -147,10 +177,19 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
       height: area.height
     })
 
-    // Só o tamanho muda: a alça cresce a janela para a direita e para baixo, com
-    // o canto superior esquerdo parado, que é o que o gesto promete visualmente.
+    // A alça cresce a janela para a direita e para baixo, com o canto superior
+    // esquerdo parado — mas o canto oposto não pode passar da área útil: janela
+    // que sai da tela não volta pelo mouse. Recuar a origem mantém o crescimento
+    // acompanhando o cursor; truncar o tamanho faria a janela parar de crescer
+    // com o cursor ainda andando, que é a mesma sensação de travamento.
+    const pos = clampToArea({ x: bounds.x, y: bounds.y }, next.width, next.height, area)
+
+    // O recuo emite 'moved'; sem atualizar placedAt ele viraria uma
+    // customPosition gravada sozinha, que é o que a guarda de eco existe para evitar.
+    placedAt = pos
     placedSize = next
-    writeBounds(target, { x: bounds.x, y: bounds.y, width: next.width, height: next.height })
+    writeBounds(target, { x: pos.x, y: pos.y, width: next.width, height: next.height })
+    schedulePersist(next)
   }
 
   function setLocked(locked: boolean): void {
@@ -187,6 +226,12 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
       alwaysOnTop: true,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
+        // O Windows marca como ocluída a segunda janela transparente e
+        // always-on-top que aparece, mesmo sem nada por cima dela. Ocluído, o
+        // renderer para de pintar e de emitir 'resize': o overlay congela na
+        // tela enquanto a janela nativa continua sendo redimensionada pelo
+        // setBounds. Sem throttling o widget nunca entra nesse estado.
+        backgroundThrottling: false,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -227,6 +272,7 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
         win = null
         placedAt = null
         placedSize = null
+        cancelPersist()
       }
     })
 
@@ -261,6 +307,7 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
     win = null
     placedAt = null
     placedSize = null
+    cancelPersist()
     if (target === null) return
     target.removeAllListeners('moved')
     target.removeAllListeners('resized')

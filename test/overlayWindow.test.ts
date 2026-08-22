@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 interface Bounds {
   x: number
@@ -12,8 +12,17 @@ let bounds: Bounds = { x: 0, y: 0, width: 232, height: 150 }
 let resizable = false
 let loaded = ''
 
+interface FakeOptions {
+  webPreferences?: { backgroundThrottling?: boolean }
+}
+
+let created: FakeOptions | null = null
+
 class FakeWindow {
   destroyed = false
+  constructor(options: FakeOptions) {
+    created = options
+  }
   on(event: string, cb: () => void): void {
     const list = listeners.get(event) ?? []
     list.push(cb)
@@ -101,6 +110,12 @@ beforeEach(() => {
   bounds = { x: 0, y: 0, width: 232, height: 150 }
   resizable = false
   loaded = ''
+  created = null
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('createOverlayWindow', () => {
@@ -161,6 +176,69 @@ describe('createOverlayWindow', () => {
     bounds = { ...bounds, width: 300, height: 210 }
     fire('resized')
     expect(resizes).toEqual([{ width: 300, height: 210 }])
+  })
+
+  /**
+   * O Windows marca como ocluída a segunda janela transparente e always-on-top
+   * que aparece, mesmo sem nada por cima. Ocluída, o renderer para de pintar e
+   * de emitir 'resize': o overlay congela na tela enquanto a janela nativa
+   * continua sendo redimensionada.
+   */
+  it('cria a janela sem throttling de segundo plano', () => {
+    const { controller } = setup()
+    controller.ensure()
+    expect(created?.webPreferences?.backgroundThrottling).toBe(false)
+  })
+
+  it('recua a janela para que o novo tamanho caiba na área útil', () => {
+    const { controller } = setup()
+    controller.ensure()
+    bounds = { x: 1700, y: 900, width: 232, height: 150 }
+    controller.resizeTo({ width: 400, height: 300 })
+    // 1920x1040 de área útil: 1700+400 e 900+300 estourariam as duas bordas.
+    expect(bounds).toEqual({ x: 1520, y: 740, width: 400, height: 300 })
+  })
+
+  it('o recuo do resizeTo não vira posição customizada', () => {
+    const { controller, moves } = setup()
+    controller.ensure()
+    bounds = { x: 1700, y: 900, width: 232, height: 150 }
+    controller.resizeTo({ width: 400, height: 300 })
+    fire('moved')
+    expect(moves).toEqual([])
+  })
+
+  it('persiste o tamanho arrastado depois que o gesto para', () => {
+    const { controller, resizes } = setup()
+    controller.ensure()
+    controller.resizeTo({ width: 300, height: 200 })
+    fire('resized')
+    expect(resizes).toEqual([])
+    vi.advanceTimersByTime(1000)
+    expect(resizes).toEqual([{ width: 300, height: 200 }])
+  })
+
+  it('uma rajada de arrasto persiste só o tamanho final', () => {
+    const { controller, resizes } = setup()
+    controller.ensure()
+    for (let step = 1; step <= 8; step += 1) {
+      controller.resizeTo({ width: 240 + step * 15, height: 156 + step * 10 })
+      vi.advanceTimersByTime(16)
+    }
+    expect(resizes).toEqual([])
+    vi.advanceTimersByTime(1000)
+    expect(resizes).toEqual([{ width: 360, height: 236 }])
+    expect(bounds.width).toBe(360)
+    expect(bounds.height).toBe(236)
+  })
+
+  it('destruir a janela cancela a gravação pendente', () => {
+    const { controller, resizes } = setup()
+    controller.ensure()
+    controller.resizeTo({ width: 300, height: 200 })
+    controller.destroy()
+    vi.advanceTimersByTime(1000)
+    expect(resizes).toEqual([])
   })
 
   it('carrega a página indicada no spec', () => {
