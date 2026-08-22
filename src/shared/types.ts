@@ -64,7 +64,15 @@ export interface BetSpreadRule {
 /** Um spread por sistema: as escalas são incomparáveis (TC ±5 vs RC -20..+8). */
 export type BetSpreadsBySystem = Record<CountingSystem, BetSpreadRule[]>
 
-export type HotkeyAction = 'low' | 'neutral' | 'high' | 'undo' | 'redo' | 'newShoe' | 'toggleOverlay'
+export type HotkeyAction =
+  | 'low'
+  | 'neutral'
+  | 'high'
+  | 'undo'
+  | 'redo'
+  | 'newShoe'
+  | 'toggleOverlay'
+  | 'toggleStrategyOverlay'
 
 export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   'low',
@@ -73,16 +81,22 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   'undo',
   'redo',
   'newShoe',
-  'toggleOverlay'
+  'toggleOverlay',
+  'toggleStrategyOverlay'
 ]
 
 /**
  * Ações que podem ficar SEM tecla. As quatro originais sempre têm bind (ficar
- * sem tecla de contagem torna o app inútil); as três novas custam teclas do
+ * sem tecla de contagem torna o app inútil); as quatro novas custam teclas do
  * sistema inteiro, então entram desligadas e o usuário escolhe se quer pagar
  * esse preço.
  */
-export const OPTIONAL_HOTKEY_ACTIONS: readonly HotkeyAction[] = ['redo', 'newShoe', 'toggleOverlay']
+export const OPTIONAL_HOTKEY_ACTIONS: readonly HotkeyAction[] = [
+  'redo',
+  'newShoe',
+  'toggleOverlay',
+  'toggleStrategyOverlay'
+]
 
 export function isOptionalHotkeyAction(action: HotkeyAction): boolean {
   return OPTIONAL_HOTKEY_ACTIONS.includes(action)

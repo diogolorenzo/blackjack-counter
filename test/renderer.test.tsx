@@ -64,6 +64,13 @@ describe('App', () => {
     expect(api.applyCount).toHaveBeenCalledWith(1)
   })
 
+  it('o botão de guia de jogada liga o overlay de jogada', async () => {
+    const api = stubApi(snapshot())
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Jogada' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({ strategyOverlay: { visible: true } })
+  })
+
   it('novo shoe pede confirmação antes de zerar', async () => {
     const api = stubApi(snapshot({}, 3))
     render(<App />)

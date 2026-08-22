@@ -148,6 +148,25 @@ describe('HotkeyManager', () => {
     key?.()
     expect(fired).toEqual([])
   })
+
+  it('a ação de overlay de jogada é opcional e registrável', () => {
+    const fired: string[] = []
+    const m = new HotkeyManager((a) => fired.push(a))
+    const status = m.apply(
+      binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4', toggleStrategyOverlay: 'F6' }),
+      true
+    )
+
+    expect(status.toggleStrategyOverlay).toBe('ok')
+    shortcuts.get('F6')?.()
+    expect(fired).toEqual(['toggleStrategyOverlay'])
+  })
+
+  it('sem tecla atribuída fica disabled, não conflict', () => {
+    const m = new HotkeyManager(() => {})
+    const status = m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
+    expect(status.toggleStrategyOverlay).toBe('disabled')
+  })
 })
 
 function harness() {

@@ -106,7 +106,8 @@ describe('SettingsStore probe', () => {
       undo: 'numdiv',
       redo: '',
       newShoe: 'F9',
-      toggleOverlay: 'F10'
+      toggleOverlay: 'F10',
+      toggleStrategyOverlay: ''
     })
   })
 

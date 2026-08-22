@@ -90,7 +90,8 @@ const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   undo: 'Desfazer última carta',
   redo: 'Refazer',
   newShoe: 'Novo shoe',
-  toggleOverlay: 'Mostrar/esconder overlay'
+  toggleOverlay: 'Mostrar/esconder overlay',
+  toggleStrategyOverlay: 'Mostrar/esconder guia de jogada'
 }
 
 const CORE_ACTIONS = HOTKEY_ACTIONS.filter((action) => !isOptionalHotkeyAction(action))

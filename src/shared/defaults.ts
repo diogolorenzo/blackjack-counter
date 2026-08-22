@@ -72,8 +72,8 @@ export const DEFAULT_BET_SPREADS: BetSpreadsBySystem = {
  * ligadas, F1-F4 pertencem a ele no sistema inteiro (F1 não abre mais a ajuda
  * de outros programas). É reversível pelo toggle de hotkeys e por rebind.
  *
- * As três ações opcionais nascem SEM tecla: cada bind global custa uma tecla do
- * sistema inteiro, e refazer/novo shoe/overlay não valem esse preço para quem
+ * As quatro ações opcionais nascem SEM tecla: cada bind global custa uma tecla do
+ * sistema inteiro, e refazer/novo shoe/overlays não valem esse preço para quem
  * não pediu. String vazia = não atribuída.
  *
  * NÃO usar Ctrl+Alt+ como default: em teclado ABNT2 (pt-BR) o AltGr É
@@ -87,7 +87,8 @@ export const DEFAULT_BINDINGS = {
   undo: 'F4',
   redo: '',
   newShoe: '',
-  toggleOverlay: ''
+  toggleOverlay: '',
+  toggleStrategyOverlay: ''
 } as const satisfies Record<HotkeyAction, string>
 
 /**

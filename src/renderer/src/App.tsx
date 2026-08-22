@@ -33,7 +33,8 @@ const ACTION_LABELS: Record<HotkeyAction, string> = {
   undo: 'Undo',
   redo: 'Redo',
   newShoe: 'Shoe',
-  toggleOverlay: 'Overlay'
+  toggleOverlay: 'Overlay',
+  toggleStrategyOverlay: 'Jogada'
 }
 
 const STATUS_LABELS: Record<HotkeyStatus, string> = {
@@ -85,6 +86,8 @@ interface ActionButtonProps {
   disabled?: boolean
   tone?: 'default' | 'warn' | 'active'
   title?: string
+  /** Ocupa a linha inteira do grid — usado quando o número de botões é ímpar. */
+  fullWidth?: boolean
 }
 
 function ActionButton({
@@ -92,7 +95,8 @@ function ActionButton({
   onClick,
   disabled = false,
   tone = 'default',
-  title
+  title,
+  fullWidth = false
 }: ActionButtonProps) {
   const toneClass =
     tone === 'warn'
@@ -107,7 +111,7 @@ function ActionButton({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`h-8 rounded-md border text-[12px] transition-colors duration-100 disabled:opacity-30 ${toneClass}`}
+      className={`h-8 rounded-md border text-[12px] transition-colors duration-100 disabled:opacity-30 ${toneClass} ${fullWidth ? 'col-span-2' : ''}`}
     >
       {label}
     </button>
@@ -308,6 +312,7 @@ export function App() {
             })}
           </div>
 
+          {/* Desfazer, Refazer, Novo shoe — o terceiro ocupa a linha inteira */}
           <div className="grid grid-cols-2 gap-1.5">
             <ActionButton
               label={snapshot.undoRestoresShoe ? 'Desfazer shoe' : 'Desfazer'}
@@ -324,12 +329,25 @@ export function App() {
               label={confirmNewShoe ? 'Confirmar?' : 'Novo shoe'}
               tone={confirmNewShoe ? 'warn' : 'default'}
               title="Encerra o shoe atual, grava no histórico e zera a contagem"
+              fullWidth
               onClick={handleNewShoe}
             />
+          </div>
+
+          {/* Overlay e Jogada, lado a lado: são as duas janelas */}
+          <div className="grid grid-cols-2 gap-1.5">
             <ActionButton
               label={settings.overlay.visible ? 'Overlay ligado' : 'Overlay'}
               tone={settings.overlay.visible ? 'active' : 'default'}
               onClick={() => void window.counter.setOverlayVisible(!settings.overlay.visible)}
+            />
+            <ActionButton
+              label={settings.strategyOverlay.visible ? 'Jogada ligada' : 'Jogada'}
+              tone={settings.strategyOverlay.visible ? 'active' : 'default'}
+              title="Overlay com a jogada correta para cada mão no count atual"
+              onClick={() =>
+                patch({ strategyOverlay: { visible: !settings.strategyOverlay.visible } })
+              }
             />
           </div>
 

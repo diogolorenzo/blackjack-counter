@@ -60,6 +60,12 @@ function applyOverlayVisibility(controller: SessionController, visible: boolean)
   overlay?.setVisible(visible)
 }
 
+/** Espelha applyOverlayVisibility para a janela do guia de jogada. */
+function applyStrategyOverlayVisibility(controller: SessionController, visible: boolean): void {
+  controller.updateSettings({ strategyOverlay: { visible } })
+  strategyOverlay?.setVisible(visible)
+}
+
 function toggleHotkeys(controller: SessionController, manager: HotkeyManager): void {
   const enabled = !controller.getSnapshot().settings.hotkeysEnabled
   const settings = controller.updateSettings({ hotkeysEnabled: enabled }).settings
@@ -69,7 +75,8 @@ function toggleHotkeys(controller: SessionController, manager: HotkeyManager): v
 function handleHotkey(
   controller: SessionController,
   action: HotkeyAction,
-  toggleOverlay: () => void
+  toggleOverlay: () => void,
+  toggleStrategyOverlay: () => void
 ): void {
   switch (action) {
     case 'low':
@@ -92,6 +99,9 @@ function handleHotkey(
       break
     case 'toggleOverlay':
       toggleOverlay()
+      break
+    case 'toggleStrategyOverlay':
+      toggleStrategyOverlay()
       break
   }
 }
@@ -152,8 +162,15 @@ function bootstrap(): void {
     applyOverlayVisibility(controller, !controller.getSnapshot().settings.overlay.visible)
   }
 
+  const toggleStrategyOverlayVisibility = (): void => {
+    applyStrategyOverlayVisibility(
+      controller,
+      !controller.getSnapshot().settings.strategyOverlay.visible
+    )
+  }
+
   const hotkeyManager = new HotkeyManager((action) =>
-    handleHotkey(controller, action, toggleOverlayVisibility)
+    handleHotkey(controller, action, toggleOverlayVisibility, toggleStrategyOverlayVisibility)
   )
   hotkeys = hotkeyManager
 
@@ -176,6 +193,7 @@ function bootstrap(): void {
   tray = createTray({
     onShowMain: showMainWindow,
     onToggleOverlay: toggleOverlayVisibility,
+    onToggleStrategyOverlay: toggleStrategyOverlayVisibility,
     onToggleHotkeys: () => toggleHotkeys(controller, hotkeyManager),
     onNewShoe: () => {
       controller.newShoe()
