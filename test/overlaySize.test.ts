@@ -4,8 +4,10 @@ import { clampOverlaySize, effectiveOverlaySize } from '../src/shared/domain/ove
 import {
   OVERLAY_SIZE_LIMITS,
   OVERLAY_SIZES,
+  STRATEGY_GUIDE_ROWS,
   STRATEGY_MATRIX_CANVAS,
-  STRATEGY_OVERLAY_SIZES
+  STRATEGY_OVERLAY_SIZES,
+  strategyGuideRows
 } from '../src/shared/defaults'
 
 const limits = { min: { width: 100, height: 80 }, max: { width: 400, height: 300 } }
@@ -149,5 +151,28 @@ describe('tabelas de tamanho', () => {
     for (const size of sizes) {
       expect(size.height).toBeGreaterThanOrEqual(canvasHeight * (size.width / canvasWidth))
     }
+  })
+
+  /**
+   * O par do teste acima, para o guia — e o que impede a regressão que a
+   * revisão pegou: os três presets antigos tinham proporção quase idêntica
+   * (0,62 / 0,65 / 0,655) e, como a escala do guia sai só da largura, os três
+   * entregavam 2 linhas. O seletor de tamanho existia sem mudar nada do que
+   * importa.
+   *
+   * Um preset que caiba nos limites e desenhe a quantidade errada de linhas
+   * passa em todos os outros testes deste arquivo.
+   */
+  it('todo preset de guia entrega a quantidade de linhas que promete', () => {
+    for (const [size, box] of Object.entries(STRATEGY_OVERLAY_SIZES.guide)) {
+      const expected = STRATEGY_GUIDE_ROWS[size as keyof typeof STRATEGY_GUIDE_ROWS]
+      expect(strategyGuideRows(box), `preset ${size}`).toBe(expected)
+    }
+  })
+
+  /** E os três têm que ser DIFERENTES, senão o seletor de tamanho é decoração. */
+  it('os presets de guia entregam capacidades distintas', () => {
+    const rows = Object.values(STRATEGY_OVERLAY_SIZES.guide).map(strategyGuideRows)
+    expect(new Set(rows).size).toBe(rows.length)
   })
 })

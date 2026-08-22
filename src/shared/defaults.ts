@@ -162,6 +162,32 @@ export const OVERLAY_SIZES: Record<OverlaySize, { width: number; height: number 
 }
 
 /**
+ * A moldura arredondada dos dois overlays tem 1px de borda de cada lado, e ela
+ * fica FORA do elemento com `zoom`: o espaço de desenho é a janela menos 2px em
+ * cada eixo. Sem descontar, um preset que seja o canvas em escala 1,0
+ * transborda exatamente a espessura da borda.
+ */
+export const STRATEGY_OVERLAY_CARD_BORDER = 2
+
+/**
+ * Canvas do modo guia, em px de canvas. MEDIDO em Chromium sobre o CSS
+ * compilado, parcela por parcela:
+ *
+ *   chrome = p-2 do wrapper (16) + cabeçalho (16,5) + seguro (23)
+ *            + linha do "próximo" (13,75) + 3 x gap-1.5 (18)  =  87,25
+ *   rowHeight = li (16,5) + gap-[3px] da lista (3)            =  19,5
+ *
+ * As duas parcelas de 16,5 vêm do line-height 1.5 que o preflight do Tailwind
+ * põe no html sobre texto de 11px — nada aqui é chute, e nada aqui muda com a
+ * escala de tela (ao contrário do canvas da matriz).
+ *
+ * Subestimar o chrome não aparece como texto cortado pela metade: o bloco
+ * "próximo" é o último a desenhar, então é ele que some inteiro dentro do
+ * overflow-hidden.
+ */
+export const STRATEGY_GUIDE_CANVAS = { width: 220, chrome: 87.25, rowHeight: 19.5 } as const
+
+/**
  * Tamanho intrínseco do chart completo (StrategyGrid em modo compact), em px de
  * canvas — o que o overlay de matriz escala por `zoom` até caber na janela.
  *
@@ -191,19 +217,60 @@ export const STRATEGY_MATRIX_CANVAS: Size = { width: 268, height: 577 }
  * Os presets de matriz seguem a proporção de STRATEGY_MATRIX_CANVAS (~2,15x
  * mais altos que largos), senão o chart é cortado em silêncio. `medium` é o
  * canvas em tamanho natural (escala 1,0, célula em 11px); small e large mantêm
- * o mesmo passo de escala dos presets de guia (~0,84x e ~1,18x).
+ * o mesmo passo de escala (~0,83x e ~1,18x).
+ *
+ * As ALTURAS do guia são derivadas de STRATEGY_GUIDE_ROWS, não escolhidas: a
+ * escala do guia sai só da largura, então a altura é o único eixo que muda a
+ * capacidade. As larguras (200/240/290) são as de sempre.
  */
 export const STRATEGY_OVERLAY_SIZES: Record<StrategyOverlayLayout, Record<OverlaySize, Size>> = {
   guide: {
-    small: { width: 200, height: 124 },
-    medium: { width: 240, height: 156 },
-    large: { width: 290, height: 190 }
+    small: { width: 200, height: 152 },
+    medium: { width: 240, height: 224 },
+    large: { width: 290, height: 347 }
   },
   matrix: {
     small: { width: 224, height: 483 },
     medium: { width: 268, height: 577 },
     large: { width: 316, height: 681 }
   }
+}
+
+/**
+ * Quantas linhas de desvio cada preset de guia se propõe a mostrar.
+ *
+ * É a razão de ser dos três tamanhos: como a escala do guia sai só da largura
+ * (o layout é uma coluna, não um chart de proporção fixa), presets de proporção
+ * parecida entregam a MESMA capacidade e a escolha vira decoração. Foi o que
+ * acontecia antes — 200x124, 240x156 e 290x190 davam 2 linhas os três.
+ *
+ * As alturas de STRATEGY_OVERLAY_SIZES.guide são derivadas destes números, não
+ * o contrário.
+ */
+export const STRATEGY_GUIDE_ROWS: Record<OverlaySize, number> = {
+  small: 4,
+  medium: 6,
+  large: 9
+}
+
+/**
+ * Quantas linhas de desvio cabem numa janela de guia deste tamanho.
+ *
+ * Sai da altura REAL da janela e não do preset: com tamanho arrastável o preset
+ * deixa de descrever a janela, e uma regra só serve aos três presets e a
+ * qualquer tamanho parado pelo mouse. Mora no shared porque é a mesma conta que
+ * o teste usa para provar que os presets entregam STRATEGY_GUIDE_ROWS — duas
+ * cópias da fórmula divergiriam na primeira remedição.
+ */
+export function strategyGuideRows(windowSize: Size): number {
+  const width = Math.max(1, windowSize.width - STRATEGY_OVERLAY_CARD_BORDER)
+  const height = Math.max(1, windowSize.height - STRATEGY_OVERLAY_CARD_BORDER)
+  const scale = width / STRATEGY_GUIDE_CANVAS.width
+  const canvasHeight = height / scale
+  return Math.max(
+    1,
+    Math.floor((canvasHeight - STRATEGY_GUIDE_CANVAS.chrome) / STRATEGY_GUIDE_CANVAS.rowHeight)
+  )
 }
 
 /**

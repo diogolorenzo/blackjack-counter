@@ -1,45 +1,17 @@
 import { useEffect } from 'react'
 
-import { STRATEGY_MATRIX_CANVAS } from '@shared/defaults'
+import {
+  STRATEGY_GUIDE_CANVAS,
+  STRATEGY_MATRIX_CANVAS,
+  STRATEGY_OVERLAY_CARD_BORDER,
+  strategyGuideRows
+} from '@shared/defaults'
 
 import { ResizeGrip } from '@/components/ResizeGrip'
 import { StrategyGrid } from '@/components/StrategyGrid'
 import { StrategyGuide } from '@/components/StrategyGuide'
 import { useCounterState } from '@/useCounterState'
 import { useWindowSize } from '@/useWindowSize'
-
-/** Canvas de desenho do guia, escalado por `zoom` até caber na janela real. */
-const GUIDE_WIDTH = 220
-
-/**
- * Altura que o guia gasta fora da lista, em px de canvas. MEDIDA em Chromium
- * sobre o CSS compilado, parcela por parcela:
- *
- *   p-2 do wrapper .......... 16      (entra aqui porque a divisão é feita
- *   cabeçalho ............... 16,5     contra a caixa COM padding)
- *   seguro .................. 23
- *   linha do "próximo" ...... 13,75
- *   3 x gap-1.5 ............. 18
- *   ------------------------------
- *                             87,25
- *
- * Subestimar aqui não aparece como texto cortado pela metade: o bloco
- * "próximo" é o último a desenhar, então é ele que some inteiro dentro do
- * overflow-hidden — justo uma das duas coisas que o modo guia existe para
- * mostrar.
- */
-const GUIDE_CHROME = 87.25
-
-/** Passo de uma linha de desvio: o li mede 16,5 e o gap-[3px] da lista soma 3. */
-const GUIDE_ROW_HEIGHT = 19.5
-
-/**
- * A moldura arredondada tem 1px de borda de cada lado, e ela fica FORA do
- * elemento com `zoom`: o espaço de desenho é a janela menos 2px em cada eixo.
- * Sem descontar, o preset `medium` da matriz — que é o canvas em escala 1,0 —
- * transbordaria exatamente a espessura da borda.
- */
-const CARD_BORDER = 2
 
 export function StrategyOverlayApp() {
   const { snapshot } = useCounterState()
@@ -66,24 +38,19 @@ export function StrategyOverlayApp() {
   const { settings, derived } = snapshot
   const { locked, opacity, layout } = settings.strategyOverlay
 
-  const availableWidth = Math.max(1, windowSize.width - CARD_BORDER)
-  const availableHeight = Math.max(1, windowSize.height - CARD_BORDER)
+  // A borda de 1px do cartão fica fora do elemento com zoom, então o espaço de
+  // desenho é a janela menos 2px em cada eixo.
+  const availableWidth = Math.max(1, windowSize.width - STRATEGY_OVERLAY_CARD_BORDER)
+  const availableHeight = Math.max(1, windowSize.height - STRATEGY_OVERLAY_CARD_BORDER)
 
   const matrix = layout === 'matrix'
-  const designWidth = matrix ? STRATEGY_MATRIX_CANVAS.width : GUIDE_WIDTH
+  const designWidth = matrix ? STRATEGY_MATRIX_CANVAS.width : STRATEGY_GUIDE_CANVAS.width
   const scale = matrix
     ? Math.min(
         availableWidth / STRATEGY_MATRIX_CANVAS.width,
         availableHeight / STRATEGY_MATRIX_CANVAS.height
       )
-    : availableWidth / GUIDE_WIDTH
-
-  // Quantas linhas cabem sai da altura REAL, não do preset: uma regra só serve
-  // aos três presets e a qualquer tamanho arrastado.
-  const maxRows = Math.max(
-    1,
-    Math.floor((availableHeight / scale - GUIDE_CHROME) / GUIDE_ROW_HEIGHT)
-  )
+    : availableWidth / STRATEGY_GUIDE_CANVAS.width
 
   return (
     <div
@@ -113,7 +80,7 @@ export function StrategyOverlayApp() {
             decisionCount={derived.decisionCount}
             insuranceOn={derived.insuranceOn}
             surrender={settings.shoe.surrender}
-            maxRows={maxRows}
+            maxRows={strategyGuideRows(windowSize)}
           />
         )}
       </div>
