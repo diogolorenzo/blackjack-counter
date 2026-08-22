@@ -6,7 +6,13 @@ directories:
 files:
   - out/**/*
   - package.json
-# Uso local: sem assinatura de código, sem auto-update, sem publish.
+# Sem assinatura de código: o SmartScreen avisa no primeiro download manual,
+# mas o auto-update segue funcionando (o updater baixa por fora do navegador e
+# a instalação é por usuário, sem UAC).
+publish:
+  provider: github
+  owner: diogolorenzo
+  repo: blackjack-counter
 win:
   icon: build/icon.ico
   target:

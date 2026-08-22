@@ -14,6 +14,8 @@ import { SessionStore } from './state/sessionStore'
 import { SettingsStore } from './state/store'
 import { createTray } from './tray'
 import type { TrayController } from './tray'
+import { createUpdaterController } from './updater/controller'
+import type { UpdaterController } from './updater/controller'
 import { createMainWindow, getMainWindow } from './windows/mainWindow'
 import { createOverlayController } from './windows/overlayWindow'
 import type { OverlayController } from './windows/overlayWindow'
@@ -24,6 +26,7 @@ let controllerRef: SessionController | null = null
 let hotkeys: HotkeyManager | null = null
 let overlay: OverlayController | null = null
 let tray: TrayController | null = null
+let updater: UpdaterController | null = null
 
 function liveWindows(): BrowserWindow[] {
   const candidates = [getMainWindow(), overlay === null ? null : overlay.get()]
@@ -151,6 +154,8 @@ function bootstrap(): void {
   tray.update(controller.getSnapshot())
 
   if (settings.overlay.visible) overlayController.setVisible(true)
+
+  updater = createUpdaterController({ getMainWindow })
 }
 
 /**
@@ -195,6 +200,9 @@ if (!app.requestSingleInstanceLock()) {
 
     tray?.destroy()
     tray = null
+
+    updater?.dispose()
+    updater = null
   })
 
   void app.whenReady().then(bootstrap)

@@ -24,6 +24,23 @@ Para gerar um instalador Windows em `release/`:
 npm run build:win
 ```
 
+## Publicar uma atualização
+
+Quem já instalou não precisa baixar nada de novo — o app se atualiza sozinho
+(veja [Atualizações](#atualizações)). Para lançar uma versão:
+
+1. suba a `version` no `package.json`;
+2. rode o comando abaixo, com um token do GitHub em `GH_TOKEN`.
+
+```bash
+npm run build:win -- --publish always
+```
+
+Isso empacota e sobe para as Releases do repositório o `.exe`, o `.blockmap`
+(usado no download diferencial) e o `latest.yml` — o arquivo que os apps
+instalados leem para descobrir que existe versão nova. Sem os três, o
+auto-update não enxerga a release.
+
 ## Atalhos
 
 O app não sabe qual carta você viu — ele só recebe a categoria:
@@ -229,6 +246,24 @@ estaria errada, que é o modo de falha que este app inteiro tenta evitar.
 
 A pilha de desfazer não é persistida: ela é conveniência de digitação, não estado
 do jogo.
+
+## Atualizações
+
+O app checa as Releases do GitHub 30 s depois de abrir e a cada 6 h — ele fica
+dias na bandeja, então rechecar é o que mantém a instalação em dia. O download
+acontece em segundo plano e é diferencial: uma versão nova não baixa os 100 MB
+de novo, só os blocos que mudaram.
+
+Quando o download termina, o diálogo de reinício **só aparece com a janela
+principal em foco**. Foco, não visibilidade: com dois monitores a janela fica à
+vista o jogo inteiro, e interromper uma mão é exatamente o que este app existe
+para evitar. Jogando, a atualização espera em silêncio. Respondendo "Depois",
+ela entra sozinha no próximo encerramento de verdade (pela bandeja).
+
+Falha de rede não vira popup: sem internet o app abre e conta normalmente.
+
+Em desenvolvimento (`npm run dev`) nada disso roda — não há app empacotado para
+atualizar.
 
 ## Onde ficam os arquivos
 
