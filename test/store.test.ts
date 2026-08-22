@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { SettingsStore } from '../src/main/state/store'
-import { DEFAULT_SETTINGS, DEFAULT_BET_SPREAD } from '../src/shared/defaults'
+import { DEFAULT_SETTINGS, DEFAULT_BET_SPREAD, OVERLAY_SIZE_LIMITS } from '../src/shared/defaults'
 import { newController } from './helpers'
 
 function tmpFile(): string {
@@ -286,5 +286,74 @@ describe('SessionController probe', () => {
     c.onChange(() => (reached = true))
     c.apply(1)
     expect(reached).toBe(true)
+  })
+})
+
+describe('sanitização do overlay de jogada', () => {
+  it('settings antiga sem a chave ganha os defaults', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ shoe: { deckCount: 8 } }))
+    expect(new SettingsStore(p).get().strategyOverlay).toEqual(DEFAULT_SETTINGS.strategyOverlay)
+  })
+
+  it('layout inválido cai no default', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ strategyOverlay: { layout: 'holograma' } }))
+    expect(new SettingsStore(p).get().strategyOverlay.layout).toBe('guide')
+  })
+
+  it('opacidade fora de faixa é clampada', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ strategyOverlay: { opacity: 9 } }))
+    expect(new SettingsStore(p).get().strategyOverlay.opacity).toBe(1)
+  })
+
+  it('layout válido sobrevive', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ strategyOverlay: { layout: 'matrix', visible: true } }))
+    const saved = new SettingsStore(p).get().strategyOverlay
+    expect(saved.layout).toBe('matrix')
+    expect(saved.visible).toBe(true)
+  })
+})
+
+describe('sanitização de customSize', () => {
+  it('ausente vira null nos dois overlays', () => {
+    const s = new SettingsStore(tmpFile()).get()
+    expect(s.overlay.customSize).toBeNull()
+    expect(s.strategyOverlay.customSize).toBeNull()
+  })
+
+  it('tamanho válido sobrevive', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ overlay: { customSize: { width: 300, height: 200 } } }))
+    expect(new SettingsStore(p).get().overlay.customSize).toEqual({ width: 300, height: 200 })
+  })
+
+  /**
+   * settings.json editado à mão ou corrompido não pode produzir uma janela de
+   * 9999px: ela nasceria maior que a tela e sem como voltar.
+   */
+  it('tamanho absurdo é clampado para o teto do tipo', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ overlay: { customSize: { width: 9999, height: 9999 } } }))
+    expect(new SettingsStore(p).get().overlay.customSize).toEqual(OVERLAY_SIZE_LIMITS.count.max)
+  })
+
+  it('o clamp do overlay de jogada segue o layout salvo', () => {
+    const p = tmpFile()
+    writeFileSync(
+      p,
+      JSON.stringify({ strategyOverlay: { layout: 'matrix', customSize: { width: 1, height: 1 } } })
+    )
+    expect(new SettingsStore(p).get().strategyOverlay.customSize).toEqual(
+      OVERLAY_SIZE_LIMITS.strategyMatrix.min
+    )
+  })
+
+  it('shape errado vira null em vez de derrubar a leitura', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ overlay: { customSize: { width: 'grande' } } }))
+    expect(new SettingsStore(p).get().overlay.customSize).toBeNull()
   })
 })

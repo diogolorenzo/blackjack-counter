@@ -5,7 +5,8 @@ import type {
   BindingProfile,
   HotkeyAction,
   OverlaySize,
-  Settings
+  Settings,
+  StrategyOverlayLayout
 } from './types'
 
 /**
@@ -164,7 +165,7 @@ export const OVERLAY_SIZES: Record<OverlaySize, { width: number; height: number 
  * proporções incomparáveis (uma lista de 6 linhas contra um chart de 27 linhas
  * por 10 colunas), então um único conjunto de presets serviria mal aos dois.
  */
-export const STRATEGY_OVERLAY_SIZES: Record<'guide' | 'matrix', Record<OverlaySize, Size>> = {
+export const STRATEGY_OVERLAY_SIZES: Record<StrategyOverlayLayout, Record<OverlaySize, Size>> = {
   guide: {
     small: { width: 200, height: 124 },
     medium: { width: 240, height: 156 },
@@ -238,8 +239,28 @@ export const DEFAULT_SETTINGS: Settings = {
     locked: true,
     visible: false,
     customPosition: null,
+    customSize: null,
     historyLength: 8,
     showCurrency: false
+  },
+  /**
+   * Nasce travado, como o overlay de contagem: destravado ele recebe os cliques
+   * que deveriam ir para o jogo. Quem quiser posicionar destrava em Ajustes,
+   * arrasta e trava de volta.
+   *
+   * Canto oposto ao default do overlay de contagem (que é top-right) para que,
+   * ligando os dois pela primeira vez, eles não nasçam empilhados.
+   */
+  strategyOverlay: {
+    corner: 'bottom-right',
+    margin: 16,
+    opacity: 0.82,
+    locked: true,
+    visible: false,
+    customPosition: null,
+    customSize: null,
+    size: 'medium',
+    layout: 'guide'
   }
 }
 

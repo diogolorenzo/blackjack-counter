@@ -6,10 +6,13 @@ import {
   DEFAULT_BET_SPREADS,
   DEFAULT_SETTINGS,
   OVERLAY_OPACITY_RANGE,
+  OVERLAY_SIZE_LIMITS,
   SETTINGS_WRITE_DEBOUNCE_MS,
   emptyBindingProfiles
 } from '@shared/defaults'
 import { validateBetSpread } from '@shared/domain/betSpread'
+import { clampOverlaySize } from '@shared/domain/overlaySize'
+import type { SizeLimits } from '@shared/domain/overlaySize'
 import type { DeepPartial } from '@shared/ipc'
 import { HOTKEY_ACTIONS, isOptionalHotkeyAction } from '@shared/types'
 import type {
@@ -24,17 +27,21 @@ import type {
   FeedbackSettings,
   HotkeyAction,
   OverlayLayout,
+  OverlayPlacement,
   OverlaySettings,
   OverlaySize,
   Palette,
   Settings,
   ShoeConfig,
+  StrategyOverlayLayout,
+  StrategyOverlaySettings,
   TrueCountRounding
 } from '@shared/types'
 
 const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
 const OVERLAY_SIZE_VALUES: readonly OverlaySize[] = ['small', 'medium', 'large']
 const OVERLAY_LAYOUTS: readonly OverlayLayout[] = ['full', 'minimal']
+const STRATEGY_OVERLAY_LAYOUTS: readonly StrategyOverlayLayout[] = ['guide', 'matrix']
 const ROUNDING_MODES: readonly TrueCountRounding[] = ['floor', 'nearest']
 const SYSTEMS: readonly CountingSystem[] = ['hilo', 'ko']
 const PALETTES: readonly Palette[] = ['default', 'colorblind']
@@ -189,14 +196,28 @@ function sanitizeCustomPosition(value: unknown): { x: number; y: number } | null
   return { x: Math.round(x), y: Math.round(y) }
 }
 
-function sanitizeOverlay(value: unknown): OverlaySettings {
-  const raw = isPlainObject(value) ? value : {}
-  const fallback = DEFAULT_SETTINGS.overlay
+/**
+ * Sem workArea aqui: a sanitização roda no boot, antes de qualquer janela, e
+ * `screen` do Electron não pode ser importado em código compartilhado. O teto
+ * dos limites já impede o caso patológico; o ajuste fino à tela acontece no
+ * applyPlacement, que conhece o monitor.
+ */
+function sanitizeCustomSize(value: unknown, limits: SizeLimits): { width: number; height: number } | null {
+  if (!isPlainObject(value)) return null
+  const { width, height } = value
+  if (typeof width !== 'number' || typeof height !== 'number') return null
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null
+  return clampOverlaySize({ width, height }, limits, limits.max)
+}
+
+function sanitizePlacement(
+  raw: Record<string, unknown>,
+  fallback: OverlayPlacement,
+  limits: SizeLimits
+): OverlayPlacement {
   return {
     corner: pickEnum(raw.corner, CORNERS, fallback.corner),
     margin: pickInteger(raw.margin, MARGIN_RANGE.min, MARGIN_RANGE.max, fallback.margin),
-    size: pickEnum(raw.size, OVERLAY_SIZE_VALUES, fallback.size),
-    layout: pickEnum(raw.layout, OVERLAY_LAYOUTS, fallback.layout),
     opacity: pickNumber(
       raw.opacity,
       OVERLAY_OPACITY_RANGE.min,
@@ -206,6 +227,17 @@ function sanitizeOverlay(value: unknown): OverlaySettings {
     locked: pickBoolean(raw.locked, fallback.locked),
     visible: pickBoolean(raw.visible, fallback.visible),
     customPosition: sanitizeCustomPosition(raw.customPosition),
+    customSize: sanitizeCustomSize(raw.customSize, limits)
+  }
+}
+
+function sanitizeOverlay(value: unknown): OverlaySettings {
+  const raw = isPlainObject(value) ? value : {}
+  const fallback = DEFAULT_SETTINGS.overlay
+  return {
+    ...sanitizePlacement(raw, fallback, OVERLAY_SIZE_LIMITS.count),
+    size: pickEnum(raw.size, OVERLAY_SIZE_VALUES, fallback.size),
+    layout: pickEnum(raw.layout, OVERLAY_LAYOUTS, fallback.layout),
     historyLength: pickInteger(
       raw.historyLength,
       HISTORY_LENGTH_RANGE.min,
@@ -213,6 +245,21 @@ function sanitizeOverlay(value: unknown): OverlaySettings {
       fallback.historyLength
     ),
     showCurrency: pickBoolean(raw.showCurrency, fallback.showCurrency)
+  }
+}
+
+function sanitizeStrategyOverlay(value: unknown): StrategyOverlaySettings {
+  const raw = isPlainObject(value) ? value : {}
+  const fallback = DEFAULT_SETTINGS.strategyOverlay
+  // O limite depende do layout: a matriz tem piso muito maior que o guia, e
+  // usar o limite errado gravaria um tamanho que o outro modo não aceita.
+  const layout = pickEnum(raw.layout, STRATEGY_OVERLAY_LAYOUTS, fallback.layout)
+  const limits =
+    layout === 'matrix' ? OVERLAY_SIZE_LIMITS.strategyMatrix : OVERLAY_SIZE_LIMITS.strategyGuide
+  return {
+    ...sanitizePlacement(raw, fallback, limits),
+    size: pickEnum(raw.size, OVERLAY_SIZE_VALUES, fallback.size),
+    layout
   }
 }
 
@@ -312,7 +359,8 @@ function sanitizeSettings(raw: unknown): Settings {
       DEFAULT_SETTINGS.deviationsLayout
     ),
     bindingProfiles: sanitizeBindingProfiles(merged.bindingProfiles),
-    overlay: sanitizeOverlay(merged.overlay)
+    overlay: sanitizeOverlay(merged.overlay),
+    strategyOverlay: sanitizeStrategyOverlay(merged.strategyOverlay)
   }
 }
 
