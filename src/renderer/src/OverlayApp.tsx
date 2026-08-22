@@ -8,6 +8,7 @@ import type { Derived, Entry } from '@shared/types'
 import { BetSuggestion } from '@/components/BetSuggestion'
 import { CountDisplay } from '@/components/CountDisplay'
 import { HistoryStrip } from '@/components/HistoryStrip'
+import { ResizeGrip } from '@/components/ResizeGrip'
 import { ShoeMeter } from '@/components/ShoeMeter'
 import { secondaryCount } from '@/countView'
 import { useCounterState } from '@/useCounterState'
@@ -108,6 +109,7 @@ export function OverlayApp() {
           className="absolute top-[3px] left-1/2 h-[2px] w-7 -translate-x-1/2 rounded-full bg-fg/40"
         />
       )}
+      {!locked && <ResizeGrip kind="count" />}
 
       <div
         className="flex flex-col gap-1 p-2"

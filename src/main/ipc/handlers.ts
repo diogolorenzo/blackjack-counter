@@ -4,7 +4,7 @@ import type { BrowserWindow } from 'electron'
 import { simulateRisk } from '@shared/domain/risk'
 import type { RiskResult } from '@shared/domain/risk'
 import { IPC } from '@shared/ipc'
-import type { DeepPartial, SetBindingResult } from '@shared/ipc'
+import type { DeepPartial, OverlayKind, SetBindingResult } from '@shared/ipc'
 import { HOTKEY_ACTIONS, isOptionalHotkeyAction } from '@shared/types'
 import type {
   AppSnapshot,
@@ -48,6 +48,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+const OVERLAY_KINDS: readonly OverlayKind[] = ['count', 'strategy']
+
+function isOverlayKind(value: unknown): value is OverlayKind {
+  return typeof value === 'string' && (OVERLAY_KINDS as readonly string[]).includes(value)
+}
+
+function asSize(value: unknown): { width: number; height: number } | null {
+  if (!isPlainObject(value)) return null
+  const { width, height } = value
+  if (!isFiniteNumber(width) || !isFiniteNumber(height)) return null
+  return { width, height }
 }
 
 function placementChanged(before: OverlayPlacement, after: OverlayPlacement): boolean {
@@ -262,6 +275,12 @@ export function registerIpcHandlers(deps: {
   handle(IPC.overlaySetSize, (size) =>
     isOverlaySize(size) ? applyPatch({ overlay: { size } }) : controller.getSnapshot()
   )
+  // Nesta task só existe o overlay de contagem; a Task 10 acrescenta o outro braço.
+  handle(IPC.overlayResizeTo, (kind, size) => {
+    const target = asSize(size)
+    if (!isOverlayKind(kind) || target === null) return
+    if (kind === 'count') overlay.resizeTo(target)
+  })
 
   handle(IPC.historyGet, () => controller.getHistory())
   handle(IPC.historySetResult, (id, result) => setShoeResult(id, result))

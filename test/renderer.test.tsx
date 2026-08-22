@@ -66,6 +66,7 @@ function stubApi(state: AppSnapshot): CounterApi {
     setOverlayLocked: vi.fn(async () => state),
     setOverlayCorner: vi.fn(async () => state),
     setOverlaySize: vi.fn(async () => state),
+    resizeOverlay: vi.fn(async () => undefined),
     getHistory: vi.fn(async () => []),
     setShoeResult: vi.fn(async () => []),
     clearHistory: vi.fn(async () => []),

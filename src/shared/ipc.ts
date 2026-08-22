@@ -34,6 +34,7 @@ export const IPC = {
   overlaySetLocked: 'overlay:setLocked',
   overlaySetCorner: 'overlay:setCorner',
   overlaySetSize: 'overlay:setSize',
+  overlayResizeTo: 'overlay:resizeTo',
   historyGet: 'history:get',
   historySetResult: 'history:setResult',
   historyClear: 'history:clear',
@@ -47,6 +48,9 @@ export const IPC = {
 export const IPC_EVENTS = {
   stateChanged: 'state:changed'
 } as const
+
+/** Qual das duas janelas de overlay um canal endereça. */
+export type OverlayKind = 'count' | 'strategy'
 
 export interface SetBindingResult {
   ok: boolean
@@ -86,6 +90,8 @@ export interface CounterApi {
   setOverlayLocked(locked: boolean): Promise<AppSnapshot>
   setOverlayCorner(corner: Corner, margin?: number): Promise<AppSnapshot>
   setOverlaySize(size: OverlaySize): Promise<AppSnapshot>
+  /** Arrasto da alça. Não devolve snapshot: a persistência vem do evento 'resized' do main. */
+  resizeOverlay(kind: OverlayKind, size: { width: number; height: number }): Promise<void>
 
   getHistory(): Promise<ShoeRecord[]>
   setShoeResult(id: string, result: number | null): Promise<ShoeRecord[]>

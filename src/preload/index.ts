@@ -33,6 +33,7 @@ const api: CounterApi = {
   setOverlayLocked: (locked) => ipcRenderer.invoke(IPC.overlaySetLocked, locked),
   setOverlayCorner: (corner, margin) => ipcRenderer.invoke(IPC.overlaySetCorner, corner, margin),
   setOverlaySize: (size) => ipcRenderer.invoke(IPC.overlaySetSize, size),
+  resizeOverlay: (kind, size) => ipcRenderer.invoke(IPC.overlayResizeTo, kind, size),
 
   getHistory: () => ipcRenderer.invoke(IPC.historyGet),
   setShoeResult: (id, result) => ipcRenderer.invoke(IPC.historySetResult, id, result),
