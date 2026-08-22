@@ -10,9 +10,28 @@ import { useWindowSize } from '@/useWindowSize'
 
 /** Canvas de desenho do guia, escalado por `zoom` até caber na janela real. */
 const GUIDE_WIDTH = 220
-/** Altura consumida por cabeçalho, seguro e linha do "próximo". */
-const GUIDE_CHROME = 74
-const GUIDE_ROW_HEIGHT = 15
+
+/**
+ * Altura que o guia gasta fora da lista, em px de canvas. MEDIDA em Chromium
+ * sobre o CSS compilado, parcela por parcela:
+ *
+ *   p-2 do wrapper .......... 16      (entra aqui porque a divisão é feita
+ *   cabeçalho ............... 16,5     contra a caixa COM padding)
+ *   seguro .................. 23
+ *   linha do "próximo" ...... 13,75
+ *   3 x gap-1.5 ............. 18
+ *   ------------------------------
+ *                             87,25
+ *
+ * Subestimar aqui não aparece como texto cortado pela metade: o bloco
+ * "próximo" é o último a desenhar, então é ele que some inteiro dentro do
+ * overflow-hidden — justo uma das duas coisas que o modo guia existe para
+ * mostrar.
+ */
+const GUIDE_CHROME = 87.25
+
+/** Passo de uma linha de desvio: o li mede 16,5 e o gap-[3px] da lista soma 3. */
+const GUIDE_ROW_HEIGHT = 19.5
 
 /**
  * A moldura arredondada tem 1px de borda de cada lado, e ela fica FORA do
