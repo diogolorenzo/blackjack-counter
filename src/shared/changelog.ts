@@ -15,6 +15,16 @@ export interface ChangelogEntry {
  */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '0.3.0',
+    date: '2026-08-22',
+    changes: [
+      'Overlay de jogada: uma segunda janela sobre o jogo com a jogada correta para cada mão no count atual, em modo guia ou matriz completa.',
+      'Os dois overlays agora se redimensionam com o mouse, pela alça no canto, além dos três tamanhos prontos.',
+      'A atualização deixou de abrir uma janela do Windows: agora é uma faixa discreta no rodapé, com o progresso do download.',
+      'Atualizações chegam mais rápido: o app confere novidades 10 segundos depois de abrir e a cada 30 minutos, não mais a cada 6 horas.'
+    ]
+  },
+  {
     version: '0.2.1',
     date: '2026-08-21',
     changes: [
