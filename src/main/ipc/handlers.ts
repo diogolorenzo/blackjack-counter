@@ -21,6 +21,7 @@ import type {
 import type { HotkeyManager } from '../hotkeys/manager'
 import type { SessionController } from '../state/sessionController'
 import { activeBetSpread } from '../state/store'
+import type { UpdaterController } from '../updater/controller'
 import type { OverlayController } from '../windows/overlayWindow'
 
 const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
@@ -88,8 +89,9 @@ export function registerIpcHandlers(deps: {
   overlay: OverlayController
   strategyOverlay: OverlayController
   getMainWindow: () => BrowserWindow | null
+  updater: UpdaterController
 }): void {
-  const { controller, hotkeys, overlay, strategyOverlay, getMainWindow } = deps
+  const { controller, hotkeys, overlay, strategyOverlay, getMainWindow, updater } = deps
 
   const handle = (channel: string, listener: (...args: unknown[]) => unknown): void => {
     // Registrar o mesmo canal duas vezes lança; remover antes torna a função idempotente.
@@ -308,4 +310,8 @@ export function registerIpcHandlers(deps: {
     const window = getMainWindow()
     if (window !== null && !window.isDestroyed()) window.close()
   })
+
+  handle(IPC.updateGetStatus, () => updater.status())
+  handle(IPC.updateInstall, () => updater.install())
+  handle(IPC.updateDismiss, () => updater.dismiss())
 }

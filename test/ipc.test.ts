@@ -169,6 +169,13 @@ describe('HotkeyManager', () => {
   })
 })
 
+const noopUpdater = {
+  install: () => {},
+  dismiss: () => {},
+  status: () => null,
+  dispose: () => {}
+}
+
 function harness() {
   const store = new SettingsStore(tmpFile())
   const controller = newController(store)
@@ -204,7 +211,8 @@ function harness() {
     hotkeys,
     overlay,
     strategyOverlay,
-    getMainWindow: () => win as never
+    getMainWindow: () => win as never,
+    updater: noopUpdater
   })
   const call = (ch: string, ...args: unknown[]): unknown => {
     const fn = registered.get(ch)
@@ -450,7 +458,8 @@ describe('overlay de jogada pelo IPC', () => {
       hotkeys: new HotkeyManager(() => {}),
       overlay: count.controller,
       strategyOverlay: strategy.controller,
-      getMainWindow: () => null
+      getMainWindow: () => null,
+      updater: noopUpdater
     })
 
     await registered.get(IPC.settingsUpdate)?.({ strategyOverlay: { visible: true } })
@@ -467,7 +476,8 @@ describe('overlay de jogada pelo IPC', () => {
       hotkeys: new HotkeyManager(() => {}),
       overlay: count.controller,
       strategyOverlay: strategy.controller,
-      getMainWindow: () => null
+      getMainWindow: () => null,
+      updater: noopUpdater
     })
 
     await registered.get(IPC.overlayResizeTo)?.('strategy', { width: 300, height: 200 })
@@ -484,7 +494,8 @@ describe('overlay de jogada pelo IPC', () => {
       hotkeys: new HotkeyManager(() => {}),
       overlay: count.controller,
       strategyOverlay: strategy.controller,
-      getMainWindow: () => null
+      getMainWindow: () => null,
+      updater: noopUpdater
     })
 
     await registered.get(IPC.overlayResizeTo)?.('holograma', { width: 300, height: 200 })

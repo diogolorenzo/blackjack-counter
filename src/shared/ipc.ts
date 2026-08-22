@@ -11,7 +11,8 @@ import type {
   HotkeyStatus,
   OverlaySize,
   Settings,
-  ShoeRecord
+  ShoeRecord,
+  UpdateStatus
 } from './types'
 
 /** Renderer -> Main, via ipcRenderer.invoke (sempre aguardado). */
@@ -41,12 +42,16 @@ export const IPC = {
   riskSimulate: 'risk:simulate',
   numLockReport: 'numlock:report',
   windowMinimize: 'window:minimize',
-  windowClose: 'window:close'
+  windowClose: 'window:close',
+  updateGetStatus: 'update:getStatus',
+  updateInstall: 'update:install',
+  updateDismiss: 'update:dismiss'
 } as const
 
 /** Main -> Renderer, via webContents.send (broadcast para todas as janelas). */
 export const IPC_EVENTS = {
-  stateChanged: 'state:changed'
+  stateChanged: 'state:changed',
+  updateStatus: 'update:status'
 } as const
 
 /** Qual das duas janelas de overlay um canal endereça. */
@@ -105,6 +110,13 @@ export interface CounterApi {
 
   minimizeWindow(): Promise<void>
   closeWindow(): Promise<void>
+
+  /** null = nenhuma atualização a anunciar. */
+  getUpdateStatus(): Promise<UpdateStatus | null>
+  installUpdate(): Promise<void>
+  dismissUpdate(): Promise<void>
+  /** Assina o estado da atualização. Retorna a função de unsubscribe. */
+  onUpdateStatus(cb: (status: UpdateStatus | null) => void): () => void
 
   /** Assina o broadcast de estado. Retorna a função de unsubscribe. */
   onStateChanged(cb: (snapshot: AppSnapshot) => void): () => void

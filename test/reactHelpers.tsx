@@ -70,6 +70,10 @@ export function stubApi(state: AppSnapshot): CounterApi {
     reportNumLock: vi.fn(async () => undefined),
     minimizeWindow: vi.fn(async () => undefined),
     closeWindow: vi.fn(async () => undefined),
+    getUpdateStatus: vi.fn(async () => null),
+    installUpdate: vi.fn(async () => undefined),
+    dismissUpdate: vi.fn(async () => undefined),
+    onUpdateStatus: vi.fn(() => () => undefined),
     onStateChanged: vi.fn(() => () => undefined)
   } satisfies CounterApi
 

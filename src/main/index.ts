@@ -5,7 +5,7 @@ import type { BrowserWindow } from 'electron'
 
 import { OVERLAY_SIZES, OVERLAY_SIZE_LIMITS, STRATEGY_OVERLAY_SIZES } from '@shared/defaults'
 import { IPC_EVENTS } from '@shared/ipc'
-import type { AppSnapshot, HotkeyAction } from '@shared/types'
+import type { AppSnapshot, HotkeyAction, UpdateStatus } from '@shared/types'
 
 import { HotkeyManager } from './hotkeys/manager'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -44,6 +44,10 @@ function liveWindows(): BrowserWindow[] {
 function broadcast(snapshot: AppSnapshot): void {
   for (const win of liveWindows()) win.webContents.send(IPC_EVENTS.stateChanged, snapshot)
   tray?.update(snapshot)
+}
+
+function broadcastUpdate(status: UpdateStatus | null): void {
+  for (const win of liveWindows()) win.webContents.send(IPC_EVENTS.updateStatus, status)
 }
 
 function showMainWindow(): void {
@@ -182,12 +186,18 @@ function bootstrap(): void {
   // Sem unsubscribe: o assinante vive tanto quanto o processo.
   controller.onChange(broadcast)
 
+  // Criado antes de registerIpcHandlers porque os handlers precisam da
+  // referência dele em deps. broadcastUpdate só é chamada por callback dos
+  // eventos do autoUpdater, então não há ciclo de inicialização.
+  updater = createUpdaterController({ broadcast: broadcastUpdate })
+
   registerIpcHandlers({
     controller,
     hotkeys: hotkeyManager,
     overlay: overlayController,
     strategyOverlay: strategyController,
-    getMainWindow
+    getMainWindow,
+    updater
   })
 
   tray = createTray({
@@ -206,8 +216,6 @@ function bootstrap(): void {
 
   if (settings.overlay.visible) overlayController.setVisible(true)
   if (settings.strategyOverlay.visible) strategyController.setVisible(true)
-
-  updater = createUpdaterController({ getMainWindow })
 }
 
 /**
