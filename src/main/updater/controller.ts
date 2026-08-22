@@ -14,8 +14,11 @@ const FIRST_CHECK_DELAY_MS = 10_000
 /** O app vive dias na bandeja, então rechecar é o que mantém ele em dia. */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000
 /**
- * Piso entre checagens disparadas por foco. Alt-tab é frequente; sem o piso,
- * cada volta para o app viraria um GET.
+ * Piso entre checagens disparadas por foco ou pelo timer periódico. Alt-tab é
+ * frequente; sem o piso, cada volta para o app viraria um GET. Com o intervalo
+ * de 30min do timer, o piso de 5min nunca chega a barrar uma checagem
+ * periódica legítima — só existe para o caminho de foco, mas os dois
+ * compartilham a mesma política.
  */
 const MIN_CHECK_GAP_MS = 5 * 60 * 1000
 
@@ -68,7 +71,13 @@ export function createUpdaterController(deps: {
     })
   }
 
-  function checkOnFocus(): void {
+  /**
+   * Consulta a política antes de checar. Usada tanto pelo foco quanto pelo
+   * timer periódico: sem isso, o timer atravessaria a regra de shouldCheck e
+   * bateria no GitHub a cada 30min mesmo com a atualização pronta ou já
+   * baixando.
+   */
+  function checkIfDue(): void {
     if (!shouldCheck(state, Date.now(), MIN_CHECK_GAP_MS)) return
     check()
   }
@@ -111,10 +120,10 @@ export function createUpdaterController(deps: {
     emit()
   })
 
-  app.on('browser-window-focus', checkOnFocus)
+  app.on('browser-window-focus', checkIfDue)
 
   firstCheck = setTimeout(check, FIRST_CHECK_DELAY_MS)
-  recheck = setInterval(check, CHECK_INTERVAL_MS)
+  recheck = setInterval(checkIfDue, CHECK_INTERVAL_MS)
 
   return {
     install: () => {
@@ -133,7 +142,7 @@ export function createUpdaterController(deps: {
       if (recheck !== null) clearInterval(recheck)
       firstCheck = null
       recheck = null
-      app.removeListener('browser-window-focus', checkOnFocus)
+      app.removeListener('browser-window-focus', checkIfDue)
       autoUpdater.removeAllListeners()
     }
   }

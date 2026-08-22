@@ -504,3 +504,75 @@ describe('overlay de jogada pelo IPC', () => {
     expect(strategy.calls).toEqual([])
   })
 })
+
+function fakeUpdater() {
+  const calls: string[] = []
+  return {
+    calls,
+    controller: {
+      install: () => calls.push('install'),
+      dismiss: () => calls.push('dismiss'),
+      status: () => {
+        calls.push('status')
+        return null
+      },
+      dispose: () => calls.push('dispose')
+    }
+  }
+}
+
+/**
+ * Os três canais só encaminham para o UpdaterController; sem estes testes,
+ * nada prova que `update:install` chama `install` e não, por exemplo,
+ * `dismiss` por engano num copiar-e-colar.
+ */
+describe('updater pelo IPC', () => {
+  it('update:getStatus chama status()', async () => {
+    const updater = fakeUpdater()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: fakeOverlay().controller,
+      strategyOverlay: fakeOverlay().controller,
+      getMainWindow: () => null,
+      updater: updater.controller
+    })
+
+    const result = await registered.get(IPC.updateGetStatus)?.()
+
+    expect(updater.calls).toEqual(['status'])
+    expect(result).toBeNull()
+  })
+
+  it('update:install chama install()', async () => {
+    const updater = fakeUpdater()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: fakeOverlay().controller,
+      strategyOverlay: fakeOverlay().controller,
+      getMainWindow: () => null,
+      updater: updater.controller
+    })
+
+    await registered.get(IPC.updateInstall)?.()
+
+    expect(updater.calls).toEqual(['install'])
+  })
+
+  it('update:dismiss chama dismiss()', async () => {
+    const updater = fakeUpdater()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: fakeOverlay().controller,
+      strategyOverlay: fakeOverlay().controller,
+      getMainWindow: () => null,
+      updater: updater.controller
+    })
+
+    await registered.get(IPC.updateDismiss)?.()
+
+    expect(updater.calls).toEqual(['dismiss'])
+  })
+})

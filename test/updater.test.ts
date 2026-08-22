@@ -82,4 +82,17 @@ describe('shouldCheck', () => {
   it('baixando -> não checa', () => {
     expect(shouldCheck({ ...idle, phase: 'downloading' }, 999_999, 300_000)).toBe(false)
   })
+
+  /**
+   * `checking` é o estado mais provável de se encontrar na prática (round-trip
+   * de rede lento): a checagem anterior carimbou `lastCheckAt` e ainda não
+   * respondeu. `checking` não tem uma regra própria em `shouldCheck` — cai na
+   * mesma janela mínima de idle/error — mas ainda assim não pode disparar uma
+   * segunda checagem por cima da que está em andamento.
+   */
+  it('checando, dentro da janela mínima -> não checa', () => {
+    expect(
+      shouldCheck({ ...idle, phase: 'checking', lastCheckAt: 1_000 }, 200_000, 300_000)
+    ).toBe(false)
+  })
 })
