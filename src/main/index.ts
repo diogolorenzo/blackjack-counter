@@ -227,15 +227,18 @@ if (!app.requestSingleInstanceLock()) {
     sessionStore?.dispose()
     sessionStore = null
 
-    store?.flush()
-    store?.dispose()
-    store = null
-
     overlay?.destroy()
     overlay = null
 
     strategyOverlay?.destroy()
     strategyOverlay = null
+
+    // Depois dos overlays: destruí-los grava o tamanho que a alça deixou
+    // pendente, e essa escrita ainda precisa de um flush para sair do debounce
+    // do store antes de o processo morrer.
+    store?.flush()
+    store?.dispose()
+    store = null
 
     tray?.destroy()
     tray = null

@@ -232,13 +232,35 @@ describe('createOverlayWindow', () => {
     expect(bounds.height).toBe(236)
   })
 
-  it('destruir a janela cancela a gravação pendente', () => {
+  /**
+   * A janela pode morrer dentro da espera do debounce — soltar a alça e fechar o
+   * app em seguida é um gesto normal. Cancelar sem gravar perderia o tamanho.
+   */
+  it('destruir a janela grava o tamanho pendente em vez de descartá-lo', () => {
     const { controller, resizes } = setup()
     controller.ensure()
     controller.resizeTo({ width: 300, height: 200 })
     controller.destroy()
+    expect(resizes).toEqual([{ width: 300, height: 200 }])
     vi.advanceTimersByTime(1000)
-    expect(resizes).toEqual([])
+    expect(resizes).toEqual([{ width: 300, height: 200 }])
+  })
+
+  it('a janela fechada pelo sistema também grava o tamanho pendente', () => {
+    const { controller, resizes } = setup()
+    controller.ensure()
+    controller.resizeTo({ width: 300, height: 200 })
+    fire('closed')
+    expect(resizes).toEqual([{ width: 300, height: 200 }])
+  })
+
+  it('destruir depois do debounce não grava o mesmo tamanho duas vezes', () => {
+    const { controller, resizes } = setup()
+    controller.ensure()
+    controller.resizeTo({ width: 300, height: 200 })
+    vi.advanceTimersByTime(1000)
+    controller.destroy()
+    expect(resizes).toEqual([{ width: 300, height: 200 }])
   })
 
   it('carrega a página indicada no spec', () => {

@@ -97,11 +97,24 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
   let placedAt: Point | null = null
   let placedSize: Size | null = null
   let persistTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingSize: Size | null = null
 
-  function cancelPersist(): void {
-    if (persistTimer === null) return
-    clearTimeout(persistTimer)
-    persistTimer = null
+  /**
+   * Grava o tamanho pendente e desarma o timer.
+   *
+   * Serve como callback do debounce e como flush de quem mata a janela: cancelar
+   * sem gravar perderia o gesto que acabou de terminar, porque a janela pode
+   * morrer dentro da espera. Zerar `pendingSize` antes de chamar `onResized` é o
+   * que impede a gravação dupla quando o timer já disparou.
+   */
+  function flushPersist(): void {
+    const size = pendingSize
+    pendingSize = null
+    if (persistTimer !== null) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    if (size !== null) spec.onResized(size)
   }
 
   /**
@@ -111,11 +124,9 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
    * se perderia no próximo applyPlacement.
    */
   function schedulePersist(size: Size): void {
-    cancelPersist()
-    persistTimer = setTimeout(() => {
-      persistTimer = null
-      spec.onResized(size)
-    }, RESIZE_PERSIST_DELAY_MS)
+    pendingSize = size
+    if (persistTimer !== null) clearTimeout(persistTimer)
+    persistTimer = setTimeout(flushPersist, RESIZE_PERSIST_DELAY_MS)
   }
 
   function alive(): BrowserWindow | null {
@@ -272,7 +283,10 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
         win = null
         placedAt = null
         placedSize = null
-        cancelPersist()
+        // Fechada pelo sistema no meio da espera do debounce, esta é a última
+        // chance de gravar. onResized só escreve settings — não toca em janela
+        // nenhuma —, então é seguro rodar com a janela já morta.
+        flushPersist()
       }
     })
 
@@ -307,7 +321,7 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
     win = null
     placedAt = null
     placedSize = null
-    cancelPersist()
+    flushPersist()
     if (target === null) return
     target.removeAllListeners('moved')
     target.removeAllListeners('resized')
