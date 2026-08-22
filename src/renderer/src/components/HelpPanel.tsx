@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { APP_VERSION, CHANGELOG } from '@shared/changelog'
 import { systemProfile } from '@shared/domain/system'
 import type { Settings } from '@shared/types'
 
@@ -291,6 +292,30 @@ export function HelpPanel({ settings, onNavigate }: HelpPanelProps) {
           apareceria como número plausível e estaria errada.
         </p>
         <p>A pilha de desfazer não volta: ela é conveniência de digitação, não estado do jogo.</p>
+      </Section>
+
+      <Section title={`Versão ${APP_VERSION} e novidades`}>
+        <p>
+          O app se atualiza sozinho: quando sai uma versão nova, ele baixa em segundo plano e
+          oferece o reinício — nunca no meio de uma mão, só quando esta janela estiver em foco.
+        </p>
+        <dl className="flex flex-col gap-2">
+          {CHANGELOG.map((entry) => (
+            <div key={entry.version} className="flex flex-col">
+              <dt className="text-[11px] font-semibold text-fg">
+                {entry.version}
+                <span className="ml-1.5 font-normal text-muted">{entry.date}</span>
+              </dt>
+              <dd>
+                <ul className="flex list-disc flex-col gap-1 pl-4 text-[11px] leading-relaxed text-muted">
+                  {entry.changes.map((change) => (
+                    <li key={change}>{change}</li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          ))}
+        </dl>
       </Section>
 
       <Section title="Glossário rápido">

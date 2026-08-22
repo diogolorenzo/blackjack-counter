@@ -30,8 +30,11 @@ Quem já instalou não precisa baixar nada de novo — o app se atualiza sozinho
 (veja [Atualizações](#atualizações)). Para lançar uma versão:
 
 1. suba a `version` no `package.json`;
-2. **crie a release como rascunho antes de publicar** (veja a armadilha abaixo);
-3. rode o comando abaixo, com um token do GitHub em `GH_TOKEN`.
+2. escreva a entrada correspondente em `src/shared/changelog.ts` — o `npm test`
+   falha se ela não existir, de propósito: é o que o usuário lê na Ajuda para
+   saber o que acabou de receber;
+3. **crie a release como rascunho antes de publicar** (veja a armadilha abaixo);
+4. rode o comando abaixo, com um token do GitHub em `GH_TOKEN`.
 
 ```bash
 gh release create v0.3.0 --draft --title 0.3.0 --notes "o que mudou"
@@ -266,6 +269,11 @@ A pilha de desfazer não é persistida: ela é conveniência de digitação, nã
 do jogo.
 
 ## Atualizações
+
+A versão instalada e a lista do que mudou em cada uma aparecem na aba **Ajuda**,
+alimentadas por `src/shared/changelog.ts`. A versão exibida é injetada do
+`package.json` no build, não mantida à mão — número de versão errado na tela é
+pior que número nenhum.
 
 O app checa as Releases do GitHub 30 s depois de abrir e a cada 6 h — ele fica
 dias na bandeja, então rechecar é o que mantém a instalação em dia. O download
