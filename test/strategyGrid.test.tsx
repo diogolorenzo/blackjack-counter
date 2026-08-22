@@ -1,0 +1,55 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { StrategyGrid } from '../src/renderer/src/components/StrategyGrid'
+
+afterEach(cleanup)
+
+describe('StrategyGrid', () => {
+  it('em TC 0 manda ficar em 16 vs 10, que é o desvio mais famoso', () => {
+    render(<StrategyGrid decisionCount={0} surrender countAware />)
+    const cell = screen.getByRole('button', { name: /^16 contra 10:/ })
+    expect(cell.getAttribute('aria-label')).toContain('parar')
+  })
+
+  it('em TC -1 volta a pedir em 16 vs 10 numa mesa sem rendição', () => {
+    render(<StrategyGrid decisionCount={-1} surrender={false} countAware />)
+    const cell = screen.getByRole('button', { name: /^16 contra 10:/ })
+    expect(cell.getAttribute('aria-label')).toContain('pedir')
+  })
+
+  /**
+   * Com rendição na mesa a básica de 16 vs 10 já é render (código `R` na
+   * tabela), e o índice do Illustrious 18 só troca render por parar a partir
+   * de TC 0. Abaixo do índice a jogada certa continua sendo render — não
+   * pedir. Este é o caso que enganou a primeira versão deste teste.
+   */
+  it('com rendição na mesa, 16 vs 10 abaixo do índice é render', () => {
+    render(<StrategyGrid decisionCount={-1} surrender countAware />)
+    const cell = screen.getByRole('button', { name: /^16 contra 10:/ })
+    expect(cell.getAttribute('aria-label')).toContain('render')
+  })
+
+  /**
+   * O ponto do countAware=false. Os índices publicados são de Hi-Lo; aplicá-los
+   * ao running count do KO daria conselho errado com cara de certo.
+   */
+  it('sem countAware ignora a contagem e mostra só a básica', () => {
+    render(<StrategyGrid decisionCount={8} surrender={false} countAware={false} />)
+    const cell = screen.getByRole('button', { name: /^16 contra 10:/ })
+    expect(cell.getAttribute('aria-label')).toContain('pedir')
+  })
+
+  it('sem rendição na mesa, 16 vs A vira pedir e não render', () => {
+    render(<StrategyGrid decisionCount={0} surrender={false} countAware />)
+    const cell = screen.getByRole('button', { name: /^16 contra A:/ })
+    expect(cell.getAttribute('aria-label')).toContain('pedir')
+  })
+
+  it('sem onSelect as células não são clicáveis', () => {
+    render(<StrategyGrid decisionCount={0} surrender countAware />)
+    const cell = screen.getByRole('button', { name: /^16 contra 10:/ })
+    expect(cell.hasAttribute('disabled')).toBe(true)
+  })
+})

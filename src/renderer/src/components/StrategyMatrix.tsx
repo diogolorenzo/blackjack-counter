@@ -1,15 +1,11 @@
 import { useMemo, useState } from 'react'
 
-import {
-  HAND_ROWS,
-  KIND_LABELS,
-  UPCARDS,
-  cellDecision
-} from '@shared/domain/basicStrategy'
-import type { HandKind, HandRow, Upcard } from '@shared/domain/basicStrategy'
-import { PLAY_CODES, PLAY_LABELS, deviationsForCell } from '@shared/domain/deviations'
-import type { PlayAction } from '@shared/domain/deviations'
+import { HAND_ROWS, activeCells, cellDecision } from '@shared/domain/basicStrategy'
+import type { Upcard } from '@shared/domain/basicStrategy'
+import { PLAY_LABELS } from '@shared/domain/deviations'
 import { formatSigned } from '@shared/format'
+
+import { StrategyGrid } from './StrategyGrid'
 
 export interface StrategyMatrixProps {
   /** True count arredondado — o mesmo número que indexa o bet spread. */
@@ -20,44 +16,22 @@ export interface StrategyMatrixProps {
   insuranceOn: boolean
 }
 
-const KIND_ORDER: readonly HandKind[] = ['hard', 'soft', 'pair']
-
-/** Cor por jogada. O olho procura a cor primeiro e lê a letra depois. */
-const ACTION_TONE: Record<PlayAction, string> = {
-  hit: 'text-muted',
-  stand: 'text-fg',
-  double: 'text-warn',
-  split: 'text-pos',
-  surrender: 'text-neg',
-  insurance: 'text-warn',
-  noInsurance: 'text-muted'
-}
-
 interface Selection {
-  row: HandRow
+  handKey: string
   upcard: Upcard
 }
+
+/** Rótulo de exibição da linha, para a caixa de detalhe que só guarda a chave. */
+const rowLabel = (handKey: string): string =>
+  HAND_ROWS.find((row) => row.id === handKey)?.label ?? handKey
 
 export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: StrategyMatrixProps) {
   const [selected, setSelected] = useState<Selection | null>(null)
   const rules = useMemo(() => ({ surrender }), [surrender])
 
-  const grid = useMemo(
-    () =>
-      HAND_ROWS.map((row) => ({
-        row,
-        cells: UPCARDS.map((upcard) => ({
-          upcard,
-          decision: cellDecision(row.id, upcard, decisionCount, rules),
-          hasDeviation: deviationsForCell(row.id, upcard).length > 0
-        }))
-      })),
+  const changed = useMemo(
+    () => activeCells(decisionCount, rules).length,
     [decisionCount, rules]
-  )
-
-  const changed = grid.reduce(
-    (total, line) => total + line.cells.filter((cell) => cell.decision?.deviated === true).length,
-    0
   )
 
   const detail = selected === null ? null : buildDetail(selected, decisionCount, rules)
@@ -83,74 +57,13 @@ export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: Strate
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-separate border-spacing-[2px] text-[11px]">
-          <thead>
-            <tr>
-              <th className="ui-label w-[36px] text-left font-normal">Mão</th>
-              {UPCARDS.map((upcard) => (
-                <th key={upcard} className="ui-label w-[26px] text-center font-normal">
-                  {upcard}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          {KIND_ORDER.map((kind) => (
-            <tbody key={kind}>
-              <tr>
-                <td colSpan={UPCARDS.length + 1} className="pt-1.5 pb-0.5">
-                  <span className="ui-label">{KIND_LABELS[kind]}</span>
-                </td>
-              </tr>
-
-              {grid
-                .filter((line) => line.row.kind === kind)
-                .map((line) => (
-                  <tr key={line.row.id}>
-                    <th className="tnum text-left text-[11px] font-normal text-muted">
-                      {line.row.label}
-                    </th>
-
-                    {line.cells.map((cell) => {
-                      const action = cell.decision?.action ?? 'hit'
-                      const deviated = cell.decision?.deviated === true
-                      const isSelected =
-                        selected?.row.id === line.row.id && selected.upcard === cell.upcard
-
-                      return (
-                        <td key={cell.upcard} className="p-0">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelected(
-                                isSelected ? null : { row: line.row, upcard: cell.upcard }
-                              )
-                            }
-                            aria-label={`${line.row.label} contra ${cell.upcard}: ${PLAY_LABELS[action]}`}
-                            className={`tnum relative flex h-5 w-full items-center justify-center rounded-[3px] border font-semibold transition-colors duration-100 ${
-                              deviated
-                                ? 'border-pos bg-pos/20 text-pos'
-                                : isSelected
-                                  ? `border-muted bg-fg/10 ${ACTION_TONE[action]}`
-                                  : `border-transparent bg-surface ${ACTION_TONE[action]}`
-                            }`}
-                          >
-                            {PLAY_CODES[action]}
-                            {cell.hasDeviation && !deviated && (
-                              <span
-                                aria-hidden="true"
-                                className="absolute right-[1px] top-[1px] h-[3px] w-[3px] rounded-full bg-muted"
-                              />
-                            )}
-                          </button>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-            </tbody>
-          ))}
-        </table>
+        <StrategyGrid
+          decisionCount={decisionCount}
+          surrender={surrender}
+          countAware
+          selected={selected}
+          onSelect={setSelected}
+        />
       </div>
 
       <div className="min-h-[42px] rounded-md border border-border bg-surface px-2.5 py-2 text-[11px] leading-snug">
@@ -197,10 +110,11 @@ function buildDetail(
   count: number,
   rules: { surrender: boolean }
 ): string {
-  const decision = cellDecision(selection.row.id, selection.upcard, count, rules)
+  const decision = cellDecision(selection.handKey, selection.upcard, count, rules)
   if (decision === null) return ''
 
-  const head = `${selection.row.label} vs ${selection.upcard}: ${PLAY_LABELS[decision.action]}`
+  const label = rowLabel(selection.handKey)
+  const head = `${label} vs ${selection.upcard}: ${PLAY_LABELS[decision.action]}`
   if (decision.index === null) return `${head} — estratégia básica, a contagem não muda esta mão.`
 
   const missing = decision.distance
