@@ -324,3 +324,33 @@ describe('tamanho arrastado nos ajustes', () => {
     })
   })
 })
+
+describe('ajustes do overlay de jogada', () => {
+  it('trocar para matriz emite o patch', async () => {
+    const api = stubApi(snapshot())
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Matriz' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      strategyOverlay: { layout: 'matrix', customSize: null }
+    })
+  })
+
+  it('escolher um preset de tamanho limpa o tamanho arrastado do overlay de jogada', async () => {
+    const api = stubApi(
+      snapshot({
+        strategyOverlay: {
+          ...DEFAULT_SETTINGS.strategyOverlay,
+          customSize: { width: 300, height: 200 }
+        }
+      })
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    const grupo = screen.getByRole('group', { name: 'Tamanho do overlay de jogada' })
+    fireEvent.click(within(grupo).getByRole('button', { name: 'G' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      strategyOverlay: { size: 'large', customSize: null }
+    })
+  })
+})
