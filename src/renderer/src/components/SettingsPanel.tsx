@@ -17,6 +17,7 @@ import type {
   OverlaySize,
   Palette,
   Settings,
+  StrategyOverlayLayout,
   TrueCountRounding
 } from '@shared/types'
 
@@ -60,6 +61,11 @@ const LAYOUT_OPTIONS: readonly Option<OverlayLayout>[] = [
   { value: 'minimal', label: 'Mínimo' }
 ]
 
+const STRATEGY_LAYOUT_OPTIONS: readonly Option<StrategyOverlayLayout>[] = [
+  { value: 'guide', label: 'Guia' },
+  { value: 'matrix', label: 'Matriz' }
+]
+
 const PALETTE_OPTIONS: readonly Option<Palette>[] = [
   { value: 'default', label: 'Padrão' },
   { value: 'colorblind', label: 'Daltonismo' }
@@ -90,7 +96,8 @@ const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   undo: 'Desfazer última carta',
   redo: 'Refazer',
   newShoe: 'Novo shoe',
-  toggleOverlay: 'Mostrar/esconder overlay'
+  toggleOverlay: 'Mostrar/esconder overlay',
+  toggleStrategyOverlay: 'Mostrar/esconder guia de jogada'
 }
 
 const CORE_ACTIONS = HOTKEY_ACTIONS.filter((action) => !isOptionalHotkeyAction(action))
@@ -144,14 +151,23 @@ function Field({
 function Segmented<T extends string | number>({
   value,
   options,
-  onSelect
+  onSelect,
+  label
 }: {
   value: T
   options: readonly Option<T>[]
   onSelect: (next: T) => void
+  // Só necessário quando o mesmo rótulo de opção (P/M/G, por exemplo) aparece em
+  // mais de um Segmented na tela: sem isso o grupo não tem como ser distinguido
+  // por acessibilidade nem localizado nos testes.
+  label?: string
 }) {
   return (
-    <div className="flex overflow-hidden rounded-md border border-border">
+    <div
+      className="flex overflow-hidden rounded-md border border-border"
+      role={label !== undefined ? 'group' : undefined}
+      aria-label={label}
+    >
       {options.map((option) => (
         <button
           key={String(option.value)}
@@ -338,7 +354,7 @@ function BindingProfileSlot({
 }
 
 export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanelProps) {
-  const { shoe, overlay, bankroll, feedback, currency } = settings
+  const { shoe, overlay, strategyOverlay, bankroll, feedback, currency } = settings
   const profile = systemProfile(shoe.system)
 
   // null = o usuário regravou alguma tecla individualmente e saiu dos perfis.
@@ -353,6 +369,8 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
 
   const patchShoe = (patch: DeepPartial<Settings['shoe']>): void => onPatch({ shoe: patch })
   const patchOverlay = (patch: DeepPartial<Settings['overlay']>): void => onPatch({ overlay: patch })
+  const patchStrategyOverlay = (patch: DeepPartial<Settings['strategyOverlay']>): void =>
+    onPatch({ strategyOverlay: patch })
   const patchBankroll = (patch: DeepPartial<Settings['bankroll']>): void =>
     onPatch({ bankroll: patch })
   const patchFeedback = (patch: DeepPartial<Settings['feedback']>): void =>
@@ -544,11 +562,17 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
       </Section>
 
       <Section title="Overlay">
-        <Field label="Tamanho">
+        <Field
+          label="Tamanho"
+          hint={overlay.customSize !== null ? 'Em tamanho ajustado' : undefined}
+        >
           <Segmented
             value={overlay.size}
             options={SIZE_OPTIONS}
-            onSelect={(size) => patchOverlay({ size })}
+            label="Tamanho do overlay"
+            // Limpar customSize junto: o tamanho arrastado tem prioridade, e o
+            // preset seria calculado e ignorado em seguida.
+            onSelect={(size) => patchOverlay({ size, customSize: null })}
           />
         </Field>
 
@@ -556,6 +580,7 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
           <Segmented
             value={overlay.layout}
             options={LAYOUT_OPTIONS}
+            label="Layout do overlay"
             onSelect={(layout) => patchOverlay({ layout })}
           />
         </Field>
@@ -599,7 +624,7 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
           </div>
         </Field>
 
-        <Field label="Travar (click-through)" hint="Destravado permite arrastar">
+        <Field label="Travar (click-through)" hint="Destravado permite arrastar e redimensionar">
           <Toggle
             checked={overlay.locked}
             label="Travar overlay"
@@ -619,6 +644,99 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
             className="w-full accent-fg"
           />
         </Field>
+      </Section>
+
+      <Section title="Overlay de jogada">
+        <Field label="Mostrar" hint="Janela separada, por cima do jogo">
+          <Toggle
+            checked={strategyOverlay.visible}
+            label="Mostrar guia de jogada"
+            onChange={(visible) => patchStrategyOverlay({ visible })}
+          />
+        </Field>
+
+        <Field label="Modo" hint="Guia mostra só o que a contagem mudou">
+          <Segmented
+            value={strategyOverlay.layout}
+            options={STRATEGY_LAYOUT_OPTIONS}
+            label="Modo do overlay de jogada"
+            // Os dois layouts têm tabelas de preset diferentes: um tamanho
+            // arrastado no guia não descreve nada na matriz.
+            onSelect={(layout) => patchStrategyOverlay({ layout, customSize: null })}
+          />
+        </Field>
+
+        <Field
+          label="Tamanho"
+          hint={strategyOverlay.customSize !== null ? 'Em tamanho ajustado' : undefined}
+        >
+          <Segmented
+            value={strategyOverlay.size}
+            options={SIZE_OPTIONS}
+            label="Tamanho do overlay de jogada"
+            // Mesma razão do overlay de contagem: customSize tem prioridade sobre
+            // o preset, e escolher um preset sem limpá-lo seria ignorado.
+            onSelect={(size) => patchStrategyOverlay({ size, customSize: null })}
+          />
+        </Field>
+
+        <Field label="Opacidade" hint={`${Math.round(strategyOverlay.opacity * 100)}%`} stacked>
+          <input
+            type="range"
+            min={0.2}
+            max={1}
+            step={0.02}
+            value={strategyOverlay.opacity}
+            aria-label="Opacidade do overlay de jogada"
+            onChange={(event) =>
+              patchStrategyOverlay({ opacity: Number(event.target.value) })
+            }
+            className="w-full accent-fg"
+          />
+        </Field>
+
+        <Field
+          label="Canto"
+          hint={strategyOverlay.customPosition !== null ? 'Em posição arrastada' : undefined}
+          stacked
+        >
+          <div className="grid grid-cols-2 gap-1.5">
+            {CORNER_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={
+                  option.value === strategyOverlay.corner &&
+                  strategyOverlay.customPosition === null
+                }
+                onClick={() =>
+                  patchStrategyOverlay({ corner: option.value, customPosition: null })
+                }
+                className={`h-7 rounded-md border text-[11px] transition-colors duration-100 ${
+                  option.value === strategyOverlay.corner &&
+                  strategyOverlay.customPosition === null
+                    ? 'border-muted bg-fg/10 text-fg'
+                    : 'border-border bg-bg text-muted hover:text-fg'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Travar (click-through)" hint="Destravado permite arrastar e redimensionar">
+          <Toggle
+            checked={strategyOverlay.locked}
+            label="Travar overlay de jogada"
+            onChange={(locked) => patchStrategyOverlay({ locked })}
+          />
+        </Field>
+
+        <p className="text-[10px] leading-snug text-muted">
+          No KO os dois modos mostram estratégia básica: os índices publicados são de Hi-Lo e a
+          escala do KO é outra.
+        </p>
       </Section>
 
       <Section title="Desvios">

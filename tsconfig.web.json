@@ -33,6 +33,6 @@
     "src/renderer/**/*.tsx",
     "src/shared/**/*.ts",
     "src/preload/*.d.ts",
-    "test/**/*.test.tsx"
+    "test/**/*.tsx"
   ]
 }

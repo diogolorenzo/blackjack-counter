@@ -49,7 +49,18 @@ body[data-palette='colorblind'] {
     user-select: none;
   }
 
-  body[data-window='overlay'] {
+  /*
+    As duas janelas de overlay são BrowserWindow transparentes. Sem zerar o
+    fundo do body, a cor base pinta o canvas inteiro e a janela compõe um
+    retângulo opaco de cantos quadrados por cima do jogo — o cartão arredondado
+    fica desenhado dentro da caixa em vez de ser a janela.
+
+    Os dois valores continuam distintos no HTML de propósito: o atributo existe
+    para diferenciar as janelas, então quem precisa do mesmo tratamento lista os
+    dois aqui em vez de reusar 'overlay' em strategy.html.
+  */
+  body[data-window='overlay'],
+  body[data-window='strategy'] {
     background-color: transparent;
   }
 
@@ -114,6 +125,28 @@ body[data-palette='colorblind'] {
 
   .counter-pulse {
     animation: counter-pulse 220ms ease-out;
+  }
+
+  /*
+    Entrada da pílula de atualização.
+
+    Ela pode surgir a qualquer momento, sem nenhum gesto do jogador que a
+    peça. Um leve deslize de baixo para cima avisa que algo novo apareceu no
+    rodapé sem disputar atenção com a mesa.
+  */
+  @keyframes update-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .update-toast {
+    animation: update-toast-in 180ms ease-out;
   }
 
   /*

@@ -4,13 +4,14 @@ import type { BrowserWindow } from 'electron'
 import { simulateRisk } from '@shared/domain/risk'
 import type { RiskResult } from '@shared/domain/risk'
 import { IPC } from '@shared/ipc'
-import type { DeepPartial, SetBindingResult } from '@shared/ipc'
+import type { DeepPartial, OverlayKind, SetBindingResult } from '@shared/ipc'
 import { HOTKEY_ACTIONS, isOptionalHotkeyAction } from '@shared/types'
 import type {
   AppSnapshot,
   Corner,
   Delta,
   HotkeyAction,
+  OverlayPlacement,
   OverlaySettings,
   OverlaySize,
   Settings,
@@ -20,6 +21,7 @@ import type {
 import type { HotkeyManager } from '../hotkeys/manager'
 import type { SessionController } from '../state/sessionController'
 import { activeBetSpread } from '../state/store'
+import type { UpdaterController } from '../updater/controller'
 import type { OverlayController } from '../windows/overlayWindow'
 
 const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
@@ -49,13 +51,27 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function placementChanged(before: OverlaySettings, after: OverlaySettings): boolean {
+const OVERLAY_KINDS: readonly OverlayKind[] = ['count', 'strategy']
+
+function isOverlayKind(value: unknown): value is OverlayKind {
+  return typeof value === 'string' && (OVERLAY_KINDS as readonly string[]).includes(value)
+}
+
+function asSize(value: unknown): { width: number; height: number } | null {
+  if (!isPlainObject(value)) return null
+  const { width, height } = value
+  if (!isFiniteNumber(width) || !isFiniteNumber(height)) return null
+  return { width, height }
+}
+
+function placementChanged(before: OverlayPlacement, after: OverlayPlacement): boolean {
   return (
     before.corner !== after.corner ||
     before.margin !== after.margin ||
-    before.size !== after.size ||
     before.customPosition?.x !== after.customPosition?.x ||
-    before.customPosition?.y !== after.customPosition?.y
+    before.customPosition?.y !== after.customPosition?.y ||
+    before.customSize?.width !== after.customSize?.width ||
+    before.customSize?.height !== after.customSize?.height
   )
 }
 
@@ -71,9 +87,11 @@ export function registerIpcHandlers(deps: {
   controller: SessionController
   hotkeys: HotkeyManager
   overlay: OverlayController
+  strategyOverlay: OverlayController
   getMainWindow: () => BrowserWindow | null
+  updater: UpdaterController
 }): void {
-  const { controller, hotkeys, overlay, getMainWindow } = deps
+  const { controller, hotkeys, overlay, strategyOverlay, getMainWindow, updater } = deps
 
   const handle = (channel: string, listener: (...args: unknown[]) => unknown): void => {
     // Registrar o mesmo canal duas vezes lança; remover antes torna a função idempotente.
@@ -89,19 +107,29 @@ export function registerIpcHandlers(deps: {
     controller.setHotkeyStatus(hotkeys.apply(after.bindings, after.hotkeysEnabled))
   }
 
-  const syncOverlay = (before: OverlaySettings, after: OverlaySettings): void => {
+  /**
+   * `presetChanged` entra por fora porque `size` e `layout` moram nos tipos
+   * concretos de cada overlay, não em OverlayPlacement — e nos dois casos eles
+   * mudam o tamanho da janela.
+   */
+  const syncOverlay = (
+    before: OverlayPlacement,
+    after: OverlayPlacement,
+    presetChanged: boolean,
+    target: OverlayController
+  ): void => {
     if (!after.visible) {
-      if (before.visible) overlay.setVisible(false)
+      if (before.visible) target.setVisible(false)
       return
     }
 
     // Ao aparecer, a janela pode ter sido criada agora e não tem nada aplicado:
     // posição e lock precisam ser reenviados mesmo que os valores não tenham mudado.
     const appearing = !before.visible
-    overlay.ensure()
-    if (appearing || placementChanged(before, after)) overlay.applyPlacement(after)
-    if (appearing || before.locked !== after.locked) overlay.setLocked(after.locked)
-    if (appearing) overlay.setVisible(true)
+    target.ensure()
+    if (appearing || presetChanged || placementChanged(before, after)) target.applyPlacement()
+    if (appearing || before.locked !== after.locked) target.setLocked(after.locked)
+    if (appearing) target.setVisible(true)
   }
 
   /**
@@ -114,7 +142,19 @@ export function registerIpcHandlers(deps: {
     const before = controller.getSnapshot().settings
     const after = controller.updateSettings(patch).settings
     syncHotkeys(before, after)
-    syncOverlay(before.overlay, after.overlay)
+    syncOverlay(
+      before.overlay,
+      after.overlay,
+      before.overlay.size !== after.overlay.size || before.overlay.layout !== after.overlay.layout,
+      overlay
+    )
+    syncOverlay(
+      before.strategyOverlay,
+      after.strategyOverlay,
+      before.strategyOverlay.size !== after.strategyOverlay.size ||
+        before.strategyOverlay.layout !== after.strategyOverlay.layout,
+      strategyOverlay
+    )
     return controller.getSnapshot()
   }
 
@@ -245,6 +285,12 @@ export function registerIpcHandlers(deps: {
   handle(IPC.overlaySetSize, (size) =>
     isOverlaySize(size) ? applyPatch({ overlay: { size } }) : controller.getSnapshot()
   )
+  handle(IPC.overlayResizeTo, (kind, size) => {
+    const target = asSize(size)
+    if (!isOverlayKind(kind) || target === null) return
+    if (kind === 'count') overlay.resizeTo(target)
+    else strategyOverlay.resizeTo(target)
+  })
 
   handle(IPC.historyGet, () => controller.getHistory())
   handle(IPC.historySetResult, (id, result) => setShoeResult(id, result))
@@ -264,4 +310,8 @@ export function registerIpcHandlers(deps: {
     const window = getMainWindow()
     if (window !== null && !window.isDestroyed()) window.close()
   })
+
+  handle(IPC.updateGetStatus, () => updater.status())
+  handle(IPC.updateInstall, () => updater.install())
+  handle(IPC.updateDismiss, () => updater.dismiss())
 }

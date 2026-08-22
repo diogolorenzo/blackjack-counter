@@ -148,7 +148,33 @@ describe('HotkeyManager', () => {
     key?.()
     expect(fired).toEqual([])
   })
+
+  it('a ação de overlay de jogada é opcional e registrável', () => {
+    const fired: string[] = []
+    const m = new HotkeyManager((a) => fired.push(a))
+    const status = m.apply(
+      binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4', toggleStrategyOverlay: 'F6' }),
+      true
+    )
+
+    expect(status.toggleStrategyOverlay).toBe('ok')
+    shortcuts.get('F6')?.()
+    expect(fired).toEqual(['toggleStrategyOverlay'])
+  })
+
+  it('sem tecla atribuída fica disabled, não conflict', () => {
+    const m = new HotkeyManager(() => {})
+    const status = m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
+    expect(status.toggleStrategyOverlay).toBe('disabled')
+  })
 })
+
+const noopUpdater = {
+  install: () => {},
+  dismiss: () => {},
+  status: () => null,
+  dispose: () => {}
+}
 
 function harness() {
   const store = new SettingsStore(tmpFile())
@@ -163,15 +189,30 @@ function harness() {
     setVisible: (v: boolean) => overlayCalls.push(`setVisible:${v}`),
     setLocked: (v: boolean) => overlayCalls.push(`setLocked:${v}`),
     applyPlacement: () => overlayCalls.push('applyPlacement'),
+    resizeTo: () => overlayCalls.push('resizeTo'),
     get: () => null,
     destroy: () => overlayCalls.push('destroy')
   }
   const win = { minimize: () => overlayCalls.push('minimize'), close: () => overlayCalls.push('close'), isDestroyed: () => false }
+  const strategyOverlay = {
+    ensure: () => {
+      overlayCalls.push('strategy:ensure')
+      return {} as never
+    },
+    setVisible: (v: boolean) => overlayCalls.push(`strategy:setVisible:${v}`),
+    setLocked: (v: boolean) => overlayCalls.push(`strategy:setLocked:${v}`),
+    applyPlacement: () => overlayCalls.push('strategy:applyPlacement'),
+    resizeTo: () => overlayCalls.push('strategy:resizeTo'),
+    get: () => null,
+    destroy: () => overlayCalls.push('strategy:destroy')
+  }
   registerIpcHandlers({
     controller,
     hotkeys,
     overlay,
-    getMainWindow: () => win as never
+    strategyOverlay,
+    getMainWindow: () => win as never,
+    updater: noopUpdater
   })
   const call = (ch: string, ...args: unknown[]): unknown => {
     const fn = registered.get(ch)
@@ -384,5 +425,154 @@ describe('registerIpcHandlers', () => {
     const { call, controller } = harness()
     expect(() => call(IPC.sessionAcknowledgeRestore)).not.toThrow()
     expect(controller.getSnapshot().sessionRestored).toBe(false)
+  })
+})
+
+function fakeOverlay() {
+  const calls: string[] = []
+  return {
+    calls,
+    controller: {
+      ensure: () => {
+        calls.push('ensure')
+        return {} as never
+      },
+      setVisible: (v: boolean) => calls.push(`setVisible:${String(v)}`),
+      setLocked: (v: boolean) => calls.push(`setLocked:${String(v)}`),
+      applyPlacement: () => calls.push('applyPlacement'),
+      resizeTo: (s: { width: number; height: number }) =>
+        calls.push(`resizeTo:${s.width}x${s.height}`),
+      get: () => null,
+      destroy: () => calls.push('destroy')
+    }
+  }
+}
+
+describe('overlay de jogada pelo IPC', () => {
+  it('ligar o overlay de jogada não mexe no de contagem', async () => {
+    const count = fakeOverlay()
+    const strategy = fakeOverlay()
+    const controller = newController()
+    registerIpcHandlers({
+      controller,
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: count.controller,
+      strategyOverlay: strategy.controller,
+      getMainWindow: () => null,
+      updater: noopUpdater
+    })
+
+    await registered.get(IPC.settingsUpdate)?.({ strategyOverlay: { visible: true } })
+
+    expect(strategy.calls).toContain('setVisible:true')
+    expect(count.calls).toEqual([])
+  })
+
+  it('resizeTo é roteado pelo kind', async () => {
+    const count = fakeOverlay()
+    const strategy = fakeOverlay()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: count.controller,
+      strategyOverlay: strategy.controller,
+      getMainWindow: () => null,
+      updater: noopUpdater
+    })
+
+    await registered.get(IPC.overlayResizeTo)?.('strategy', { width: 300, height: 200 })
+
+    expect(strategy.calls).toEqual(['resizeTo:300x200'])
+    expect(count.calls).toEqual([])
+  })
+
+  it('kind desconhecido não faz nada, em vez de lançar', async () => {
+    const count = fakeOverlay()
+    const strategy = fakeOverlay()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: count.controller,
+      strategyOverlay: strategy.controller,
+      getMainWindow: () => null,
+      updater: noopUpdater
+    })
+
+    await registered.get(IPC.overlayResizeTo)?.('holograma', { width: 300, height: 200 })
+
+    expect(count.calls).toEqual([])
+    expect(strategy.calls).toEqual([])
+  })
+})
+
+function fakeUpdater() {
+  const calls: string[] = []
+  return {
+    calls,
+    controller: {
+      install: () => calls.push('install'),
+      dismiss: () => calls.push('dismiss'),
+      status: () => {
+        calls.push('status')
+        return null
+      },
+      dispose: () => calls.push('dispose')
+    }
+  }
+}
+
+/**
+ * Os três canais só encaminham para o UpdaterController; sem estes testes,
+ * nada prova que `update:install` chama `install` e não, por exemplo,
+ * `dismiss` por engano num copiar-e-colar.
+ */
+describe('updater pelo IPC', () => {
+  it('update:getStatus chama status()', async () => {
+    const updater = fakeUpdater()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: fakeOverlay().controller,
+      strategyOverlay: fakeOverlay().controller,
+      getMainWindow: () => null,
+      updater: updater.controller
+    })
+
+    const result = await registered.get(IPC.updateGetStatus)?.()
+
+    expect(updater.calls).toEqual(['status'])
+    expect(result).toBeNull()
+  })
+
+  it('update:install chama install()', async () => {
+    const updater = fakeUpdater()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: fakeOverlay().controller,
+      strategyOverlay: fakeOverlay().controller,
+      getMainWindow: () => null,
+      updater: updater.controller
+    })
+
+    await registered.get(IPC.updateInstall)?.()
+
+    expect(updater.calls).toEqual(['install'])
+  })
+
+  it('update:dismiss chama dismiss()', async () => {
+    const updater = fakeUpdater()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: fakeOverlay().controller,
+      strategyOverlay: fakeOverlay().controller,
+      getMainWindow: () => null,
+      updater: updater.controller
+    })
+
+    await registered.get(IPC.updateDismiss)?.()
+
+    expect(updater.calls).toEqual(['dismiss'])
   })
 })

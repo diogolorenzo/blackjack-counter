@@ -3,7 +3,7 @@ import type { IpcRendererEvent } from 'electron'
 
 import { IPC, IPC_EVENTS } from '@shared/ipc'
 import type { CounterApi } from '@shared/ipc'
-import type { AppSnapshot } from '@shared/types'
+import type { AppSnapshot, UpdateStatus } from '@shared/types'
 
 /**
  * Superfície mínima exposta ao renderer. `ipcRenderer` cru nunca atravessa a
@@ -33,6 +33,7 @@ const api: CounterApi = {
   setOverlayLocked: (locked) => ipcRenderer.invoke(IPC.overlaySetLocked, locked),
   setOverlayCorner: (corner, margin) => ipcRenderer.invoke(IPC.overlaySetCorner, corner, margin),
   setOverlaySize: (size) => ipcRenderer.invoke(IPC.overlaySetSize, size),
+  resizeOverlay: (kind, size) => ipcRenderer.invoke(IPC.overlayResizeTo, kind, size),
 
   getHistory: () => ipcRenderer.invoke(IPC.historyGet),
   setShoeResult: (id, result) => ipcRenderer.invoke(IPC.historySetResult, id, result),
@@ -44,6 +45,18 @@ const api: CounterApi = {
 
   minimizeWindow: () => ipcRenderer.invoke(IPC.windowMinimize),
   closeWindow: () => ipcRenderer.invoke(IPC.windowClose),
+
+  getUpdateStatus: () => ipcRenderer.invoke(IPC.updateGetStatus),
+  installUpdate: () => ipcRenderer.invoke(IPC.updateInstall),
+  dismissUpdate: () => ipcRenderer.invoke(IPC.updateDismiss),
+
+  onUpdateStatus: (cb: (status: UpdateStatus | null) => void) => {
+    const listener = (_event: IpcRendererEvent, status: UpdateStatus | null): void => cb(status)
+    ipcRenderer.on(IPC_EVENTS.updateStatus, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC_EVENTS.updateStatus, listener)
+    }
+  },
 
   onStateChanged: (cb: (snapshot: AppSnapshot) => void) => {
     const listener = (_event: IpcRendererEvent, snapshot: AppSnapshot): void => cb(snapshot)

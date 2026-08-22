@@ -64,7 +64,15 @@ export interface BetSpreadRule {
 /** Um spread por sistema: as escalas são incomparáveis (TC ±5 vs RC -20..+8). */
 export type BetSpreadsBySystem = Record<CountingSystem, BetSpreadRule[]>
 
-export type HotkeyAction = 'low' | 'neutral' | 'high' | 'undo' | 'redo' | 'newShoe' | 'toggleOverlay'
+export type HotkeyAction =
+  | 'low'
+  | 'neutral'
+  | 'high'
+  | 'undo'
+  | 'redo'
+  | 'newShoe'
+  | 'toggleOverlay'
+  | 'toggleStrategyOverlay'
 
 export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   'low',
@@ -73,16 +81,22 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   'undo',
   'redo',
   'newShoe',
-  'toggleOverlay'
+  'toggleOverlay',
+  'toggleStrategyOverlay'
 ]
 
 /**
  * Ações que podem ficar SEM tecla. As quatro originais sempre têm bind (ficar
- * sem tecla de contagem torna o app inútil); as três novas custam teclas do
+ * sem tecla de contagem torna o app inútil); as quatro novas custam teclas do
  * sistema inteiro, então entram desligadas e o usuário escolhe se quer pagar
  * esse preço.
  */
-export const OPTIONAL_HOTKEY_ACTIONS: readonly HotkeyAction[] = ['redo', 'newShoe', 'toggleOverlay']
+export const OPTIONAL_HOTKEY_ACTIONS: readonly HotkeyAction[] = [
+  'redo',
+  'newShoe',
+  'toggleOverlay',
+  'toggleStrategyOverlay'
+]
 
 export function isOptionalHotkeyAction(action: HotkeyAction): boolean {
   return OPTIONAL_HOTKEY_ACTIONS.includes(action)
@@ -113,23 +127,41 @@ export interface BindingProfile {
   bindings: Record<HotkeyAction, string> | null
 }
 
-export interface OverlaySettings {
+/**
+ * O que toda janela de overlay tem em comum: onde fica, quanto aparece e se
+ * come clique. Compartilhado porque contagem e jogada são a mesma janela em
+ * tudo que não seja conteúdo.
+ */
+export interface OverlayPlacement {
   corner: Corner
   /** px de distância das bordas da workArea. */
   margin: number
-  size: OverlaySize
-  layout: OverlayLayout
   /** 0.2..1 — opacidade do fundo do overlay. O texto continua opaco. */
   opacity: number
-  /** Travado = click-through (setIgnoreMouseEvents true). */
+  /** Travado = click-through (setIgnoreMouseEvents true), sem arrastar e sem alça. */
   locked: boolean
   visible: boolean
   /** Posição customizada vinda de arrastar. null = usar o preset de canto. */
   customPosition: { x: number; y: number } | null
+  /** Tamanho vindo do arrasto da alça. null = usar o preset de tamanho. */
+  customSize: { width: number; height: number } | null
+}
+
+export interface OverlaySettings extends OverlayPlacement {
+  size: OverlaySize
+  layout: OverlayLayout
   /** Quantos buckets recentes mostrar no histórico. */
   historyLength: number
   /** Mostrar valor em moeda em vez de unidades. */
   showCurrency: boolean
+}
+
+/** `guide` mostra só o que a contagem mudou; `matrix` é o chart completo. */
+export type StrategyOverlayLayout = 'guide' | 'matrix'
+
+export interface StrategyOverlaySettings extends OverlayPlacement {
+  size: OverlaySize
+  layout: StrategyOverlayLayout
 }
 
 export interface FeedbackSettings {
@@ -179,6 +211,7 @@ export interface Settings {
   /** Slots de teclas salvos pelo usuário. Tamanho fixo. */
   bindingProfiles: BindingProfile[]
   overlay: OverlaySettings
+  strategyOverlay: StrategyOverlaySettings
 }
 
 /** Tudo que é calculado a partir de (entries, shoeConfig, betSpread). */
@@ -286,3 +319,13 @@ export const CARDS_PER_DECK = 52
 
 /** A partir daqui o jogador tem vantagem — usado no tempo de vantagem e no tom da bandeja. */
 export const ADVANTAGE_COUNT = 2
+
+export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+
+/** Estado da atualização como a janela principal precisa ver. */
+export interface UpdateStatus {
+  phase: 'downloading' | 'ready'
+  version: string | null
+  /** 0..100. */
+  percent: number
+}

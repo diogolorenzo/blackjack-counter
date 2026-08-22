@@ -49,10 +49,11 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        // Two HTML entries: the compact main window and the transparent overlay.
+        // Three HTML entries: the compact main window and the two transparent overlays.
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          overlay: resolve(__dirname, 'src/renderer/overlay.html')
+          overlay: resolve(__dirname, 'src/renderer/overlay.html'),
+          strategy: resolve(__dirname, 'src/renderer/strategy.html')
         }
       }
     }

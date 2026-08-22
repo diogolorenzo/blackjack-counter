@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 
+import { OVERLAY_SIZES, OVERLAY_SIZE_LIMITS, STRATEGY_OVERLAY_SIZES } from '@shared/defaults'
 import { IPC_EVENTS } from '@shared/ipc'
-import type { AppSnapshot, HotkeyAction } from '@shared/types'
+import type { AppSnapshot, HotkeyAction, UpdateStatus } from '@shared/types'
 
 import { HotkeyManager } from './hotkeys/manager'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -17,7 +18,7 @@ import type { TrayController } from './tray'
 import { createUpdaterController } from './updater/controller'
 import type { UpdaterController } from './updater/controller'
 import { createMainWindow, getMainWindow } from './windows/mainWindow'
-import { createOverlayController } from './windows/overlayWindow'
+import { createOverlayWindow } from './windows/overlayWindow'
 import type { OverlayController } from './windows/overlayWindow'
 
 let store: SettingsStore | null = null
@@ -25,11 +26,16 @@ let sessionStore: SessionStore | null = null
 let controllerRef: SessionController | null = null
 let hotkeys: HotkeyManager | null = null
 let overlay: OverlayController | null = null
+let strategyOverlay: OverlayController | null = null
 let tray: TrayController | null = null
 let updater: UpdaterController | null = null
 
 function liveWindows(): BrowserWindow[] {
-  const candidates = [getMainWindow(), overlay === null ? null : overlay.get()]
+  const candidates = [
+    getMainWindow(),
+    overlay === null ? null : overlay.get(),
+    strategyOverlay === null ? null : strategyOverlay.get()
+  ]
   return candidates.filter(
     (win): win is BrowserWindow => win !== null && !win.isDestroyed() && !win.webContents.isDestroyed()
   )
@@ -38,6 +44,10 @@ function liveWindows(): BrowserWindow[] {
 function broadcast(snapshot: AppSnapshot): void {
   for (const win of liveWindows()) win.webContents.send(IPC_EVENTS.stateChanged, snapshot)
   tray?.update(snapshot)
+}
+
+function broadcastUpdate(status: UpdateStatus | null): void {
+  for (const win of liveWindows()) win.webContents.send(IPC_EVENTS.updateStatus, status)
 }
 
 function showMainWindow(): void {
@@ -54,6 +64,12 @@ function applyOverlayVisibility(controller: SessionController, visible: boolean)
   overlay?.setVisible(visible)
 }
 
+/** Espelha applyOverlayVisibility para a janela do guia de jogada. */
+function applyStrategyOverlayVisibility(controller: SessionController, visible: boolean): void {
+  controller.updateSettings({ strategyOverlay: { visible } })
+  strategyOverlay?.setVisible(visible)
+}
+
 function toggleHotkeys(controller: SessionController, manager: HotkeyManager): void {
   const enabled = !controller.getSnapshot().settings.hotkeysEnabled
   const settings = controller.updateSettings({ hotkeysEnabled: enabled }).settings
@@ -63,7 +79,8 @@ function toggleHotkeys(controller: SessionController, manager: HotkeyManager): v
 function handleHotkey(
   controller: SessionController,
   action: HotkeyAction,
-  toggleOverlay: () => void
+  toggleOverlay: () => void,
+  toggleStrategyOverlay: () => void
 ): void {
   switch (action) {
     case 'low':
@@ -87,6 +104,9 @@ function handleHotkey(
     case 'toggleOverlay':
       toggleOverlay()
       break
+    case 'toggleStrategyOverlay':
+      toggleStrategyOverlay()
+      break
   }
 }
 
@@ -108,20 +128,53 @@ function bootstrap(): void {
   })
   controllerRef = controller
 
-  const overlayController = createOverlayController(
-    () => controller.getSnapshot().settings,
-    (position) => {
-      controller.updateSettings({ overlay: { customPosition: position } })
+  const overlayController = createOverlayWindow({
+    page: 'overlay.html',
+    getPlacement: () => controller.getSnapshot().settings.overlay,
+    getPresetSize: () => OVERLAY_SIZES[controller.getSnapshot().settings.overlay.size],
+    getLimits: () => OVERLAY_SIZE_LIMITS.count,
+    onMoved: (customPosition) => {
+      controller.updateSettings({ overlay: { customPosition } })
+    },
+    onResized: (customSize) => {
+      controller.updateSettings({ overlay: { customSize } })
     }
-  )
+  })
   overlay = overlayController
+
+  const strategyController = createOverlayWindow({
+    page: 'strategy.html',
+    getPlacement: () => controller.getSnapshot().settings.strategyOverlay,
+    getPresetSize: () => {
+      const { layout, size } = controller.getSnapshot().settings.strategyOverlay
+      return STRATEGY_OVERLAY_SIZES[layout][size]
+    },
+    getLimits: () =>
+      controller.getSnapshot().settings.strategyOverlay.layout === 'matrix'
+        ? OVERLAY_SIZE_LIMITS.strategyMatrix
+        : OVERLAY_SIZE_LIMITS.strategyGuide,
+    onMoved: (customPosition) => {
+      controller.updateSettings({ strategyOverlay: { customPosition } })
+    },
+    onResized: (customSize) => {
+      controller.updateSettings({ strategyOverlay: { customSize } })
+    }
+  })
+  strategyOverlay = strategyController
 
   const toggleOverlayVisibility = (): void => {
     applyOverlayVisibility(controller, !controller.getSnapshot().settings.overlay.visible)
   }
 
+  const toggleStrategyOverlayVisibility = (): void => {
+    applyStrategyOverlayVisibility(
+      controller,
+      !controller.getSnapshot().settings.strategyOverlay.visible
+    )
+  }
+
   const hotkeyManager = new HotkeyManager((action) =>
-    handleHotkey(controller, action, toggleOverlayVisibility)
+    handleHotkey(controller, action, toggleOverlayVisibility, toggleStrategyOverlayVisibility)
   )
   hotkeys = hotkeyManager
 
@@ -133,16 +186,24 @@ function bootstrap(): void {
   // Sem unsubscribe: o assinante vive tanto quanto o processo.
   controller.onChange(broadcast)
 
+  // Criado antes de registerIpcHandlers porque os handlers precisam da
+  // referência dele em deps. broadcastUpdate só é chamada por callback dos
+  // eventos do autoUpdater, então não há ciclo de inicialização.
+  updater = createUpdaterController({ broadcast: broadcastUpdate })
+
   registerIpcHandlers({
     controller,
     hotkeys: hotkeyManager,
     overlay: overlayController,
-    getMainWindow
+    strategyOverlay: strategyController,
+    getMainWindow,
+    updater
   })
 
   tray = createTray({
     onShowMain: showMainWindow,
     onToggleOverlay: toggleOverlayVisibility,
+    onToggleStrategyOverlay: toggleStrategyOverlayVisibility,
     onToggleHotkeys: () => toggleHotkeys(controller, hotkeyManager),
     onNewShoe: () => {
       controller.newShoe()
@@ -154,8 +215,7 @@ function bootstrap(): void {
   tray.update(controller.getSnapshot())
 
   if (settings.overlay.visible) overlayController.setVisible(true)
-
-  updater = createUpdaterController({ getMainWindow })
+  if (settings.strategyOverlay.visible) strategyController.setVisible(true)
 }
 
 /**
@@ -174,8 +234,10 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {
     if (process.platform === 'darwin') return
     // Fechar a janela principal deixa o app vivo na bandeja; só sai de fato
-    // quando não sobrou nem tray nem overlay para operá-lo.
-    const overlayAlive = overlay !== null && overlay.get() !== null
+    // quando não sobrou nem tray nem overlay (de qualquer um dos dois) para operá-lo.
+    const overlayAlive =
+      (overlay !== null && overlay.get() !== null) ||
+      (strategyOverlay !== null && strategyOverlay.get() !== null)
     if (tray !== null || overlayAlive) return
     app.quit()
   })
@@ -191,12 +253,18 @@ if (!app.requestSingleInstanceLock()) {
     sessionStore?.dispose()
     sessionStore = null
 
+    overlay?.destroy()
+    overlay = null
+
+    strategyOverlay?.destroy()
+    strategyOverlay = null
+
+    // Depois dos overlays: destruí-los grava o tamanho que a alça deixou
+    // pendente, e essa escrita ainda precisa de um flush para sair do debounce
+    // do store antes de o processo morrer.
     store?.flush()
     store?.dispose()
     store = null
-
-    overlay?.destroy()
-    overlay = null
 
     tray?.destroy()
     tray = null

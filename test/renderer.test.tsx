@@ -1,84 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { App } from '../src/renderer/src/App'
 import { OverlayApp } from '../src/renderer/src/OverlayApp'
-import { DEFAULT_BET_SPREADS, DEFAULT_SETTINGS } from '../src/shared/defaults'
-import { computeDerived } from '../src/shared/domain/shoe'
-import type { CounterApi } from '../src/shared/ipc'
-import { HOTKEY_ACTIONS } from '../src/shared/types'
-import type { AppSnapshot, Entry, Settings } from '../src/shared/types'
-
-function entries(count: number): Entry[] {
-  return Array.from({ length: count }, (_, i) => ({ id: `e${i}`, delta: 1 as const, at: i }))
-}
-
-function snapshot(patch: Partial<Settings> = {}, cards = 0): AppSnapshot {
-  const settings: Settings = { ...DEFAULT_SETTINGS, ...patch }
-  const list = entries(cards)
-  const status = {} as AppSnapshot['hotkeyStatus']
-  for (const action of HOTKEY_ACTIONS) {
-    status[action] = settings.bindings[action] === '' ? 'disabled' : 'ok'
-  }
-
-  return {
-    recentEntries: [...list].reverse(),
-    derived: computeDerived(list, settings.shoe, DEFAULT_BET_SPREADS[settings.shoe.system]),
-    canUndo: cards > 0,
-    canRedo: false,
-    undoRestoresShoe: false,
-    settings,
-    hotkeyStatus: status,
-    numLockOn: true,
-    sessionRestored: false,
-    session: { active: false, id: null, startedAt: null, shoes: 0 },
-    shoeStats: { startedAt: 0, maxDecisionCount: 0, minDecisionCount: 0, msAtAdvantage: 0 },
-    applyTick: 0,
-    lastBucket: null
-  }
-}
-
-/**
- * Ponte falsa para o processo main.
- *
- * O renderer inteiro depende de `window.counter`; sem este stub nem o primeiro
- * render acontece. Cada método devolve o snapshot fixo, que é o suficiente para
- * verificar o que o renderer desenha a partir dele.
- */
-function stubApi(state: AppSnapshot): CounterApi {
-  const api = {
-    getState: vi.fn(async () => state),
-    applyCount: vi.fn(async () => state),
-    undo: vi.fn(async () => state),
-    redo: vi.fn(async () => state),
-    newShoe: vi.fn(async () => state),
-    acknowledgeRestore: vi.fn(async () => state),
-    startSession: vi.fn(async () => state),
-    endSession: vi.fn(async () => state),
-    getSettings: vi.fn(async () => state.settings),
-    updateSettings: vi.fn(async () => state),
-    setBinding: vi.fn(async () => ({ ok: true, effective: 'F1' })),
-    clearBinding: vi.fn(async () => ({ ok: true, effective: '' })),
-    setCaptureMode: vi.fn(async () => undefined),
-    setHotkeysEnabled: vi.fn(async () => state),
-    setOverlayVisible: vi.fn(async () => state),
-    setOverlayLocked: vi.fn(async () => state),
-    setOverlayCorner: vi.fn(async () => state),
-    setOverlaySize: vi.fn(async () => state),
-    getHistory: vi.fn(async () => []),
-    setShoeResult: vi.fn(async () => []),
-    clearHistory: vi.fn(async () => []),
-    simulateRisk: vi.fn(async () => null),
-    reportNumLock: vi.fn(async () => undefined),
-    minimizeWindow: vi.fn(async () => undefined),
-    closeWindow: vi.fn(async () => undefined),
-    onStateChanged: vi.fn(() => () => undefined)
-  } satisfies CounterApi
-
-  window.counter = api
-  return api
-}
+import { DEFAULT_SETTINGS } from '../src/shared/defaults'
+import { snapshot, stubApi } from './reactHelpers'
 
 afterEach(() => {
   cleanup()
@@ -135,6 +62,13 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('2-6')).toBeDefined())
     fireEvent.click(screen.getByText('2-6'))
     expect(api.applyCount).toHaveBeenCalledWith(1)
+  })
+
+  it('o botão de guia de jogada liga o overlay de jogada', async () => {
+    const api = stubApi(snapshot())
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Jogada' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({ strategyOverlay: { visible: true } })
   })
 
   it('novo shoe pede confirmação antes de zerar', async () => {
@@ -351,6 +285,72 @@ describe('OverlayApp', () => {
     await waitFor(() => {
       const root = container.firstElementChild as HTMLElement | null
       expect(root?.style.getPropertyValue('--overlay-alpha')).toBe('0.4')
+    })
+  })
+})
+
+describe('tamanho arrastado nos ajustes', () => {
+  it('avisa quando o overlay está em tamanho ajustado', async () => {
+    stubApi(
+      snapshot({
+        overlay: { ...DEFAULT_SETTINGS.overlay, customSize: { width: 300, height: 200 } }
+      })
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    expect(await screen.findByText('Em tamanho ajustado')).toBeDefined()
+  })
+
+  /**
+   * O customizado tem prioridade sobre o preset. Escolher um preset sem limpar
+   * customSize calcularia o tamanho e o ignoraria em seguida — o botão pareceria
+   * quebrado.
+   */
+  it('escolher um preset limpa o tamanho arrastado', async () => {
+    const api = stubApi(
+      snapshot({
+        overlay: { ...DEFAULT_SETTINGS.overlay, customSize: { width: 300, height: 200 } }
+      })
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    // O rótulo "G" existe em mais de um Segmented (contagem e jogada); o grupo
+    // com aria-label restringe a busca ao seletor de tamanho do overlay de contagem.
+    const grupo = await screen.findByRole('group', { name: 'Tamanho do overlay' })
+    fireEvent.click(within(grupo).getByRole('button', { name: 'G' }))
+
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      overlay: { size: 'large', customSize: null }
+    })
+  })
+})
+
+describe('ajustes do overlay de jogada', () => {
+  it('trocar para matriz emite o patch', async () => {
+    const api = stubApi(snapshot())
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Matriz' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      strategyOverlay: { layout: 'matrix', customSize: null }
+    })
+  })
+
+  it('escolher um preset de tamanho limpa o tamanho arrastado do overlay de jogada', async () => {
+    const api = stubApi(
+      snapshot({
+        strategyOverlay: {
+          ...DEFAULT_SETTINGS.strategyOverlay,
+          customSize: { width: 300, height: 200 }
+        }
+      })
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    const grupo = screen.getByRole('group', { name: 'Tamanho do overlay de jogada' })
+    fireEvent.click(within(grupo).getByRole('button', { name: 'G' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      strategyOverlay: { size: 'large', customSize: null }
     })
   })
 })

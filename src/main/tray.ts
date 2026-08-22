@@ -59,6 +59,7 @@ function tooltip(snapshot: AppSnapshot): string {
 
 export interface TrayDeps {
   onToggleOverlay: () => void
+  onToggleStrategyOverlay: () => void
   onToggleHotkeys: () => void
   onShowMain: () => void
   onNewShoe: () => void
@@ -91,6 +92,12 @@ export function createTray(deps: TrayDeps): TrayController {
           click: () => deps.onToggleOverlay()
         },
         {
+          label: 'Guia de jogada',
+          type: 'checkbox',
+          checked: snapshot.settings.strategyOverlay.visible,
+          click: () => deps.onToggleStrategyOverlay()
+        },
+        {
           label: 'Atalhos globais',
           type: 'checkbox',
           checked: snapshot.settings.hotkeysEnabled,
@@ -117,8 +124,8 @@ export function createTray(deps: TrayDeps): TrayController {
       tray.setToolTip(tooltip(snapshot))
 
       const signature = `${String(snapshot.settings.overlay.visible)}|${String(
-        snapshot.settings.hotkeysEnabled
-      )}`
+        snapshot.settings.strategyOverlay.visible
+      )}|${String(snapshot.settings.hotkeysEnabled)}`
       if (signature !== menuSignature) {
         menuSignature = signature
         rebuildMenu(snapshot)

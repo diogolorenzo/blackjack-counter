@@ -1,8 +1,9 @@
 # Counter — contador de blackjack
 
 App local (Electron) para contar cartas usando atalhos globais, sem tirar o foco
-do jogo. Tem uma janela compacta e um overlay opcional que fica por cima do jogo
-mostrando só os indicadores.
+do jogo. Tem uma janela compacta e dois overlays opcionais que ficam por cima do
+jogo: um com os indicadores da contagem, outro com a jogada correta para a mão
+atual.
 
 Além de contar, o app traz a estratégia correta para cada mão reagindo ao count
 atual, três modos de treino, histórico de sessões e dimensionamento de banca por
@@ -73,9 +74,10 @@ O app não sabe qual carta você viu — ele só recebe a categoria:
 | `F3` | −1 | 10, J, Q, K, A |
 | `F4` | desfazer | corrige a última tecla |
 
-Há mais três ações **sem tecla por padrão** — refazer, novo shoe e mostrar/esconder
-overlay. Cada atalho global custa a tecla no sistema inteiro, então elas só entram
-se você atribuir em Ajustes. "Novo shoe" é a que mais poupa alt-tab no meio da mesa.
+Há mais quatro ações **sem tecla por padrão** — refazer, novo shoe,
+mostrar/esconder overlay e mostrar/esconder o guia de jogada. Cada atalho global
+custa a tecla no sistema inteiro, então elas só entram se você atribuir em
+Ajustes. "Novo shoe" é a que mais poupa alt-tab no meio da mesa.
 
 As teclas funcionam com o jogo em foco — é o ponto do app. Enquanto os atalhos
 estiverem ligados, elas pertencem ao Counter no sistema inteiro; desligue no
@@ -92,7 +94,7 @@ individualmente:
 - **Ctrl+Shift** — mais lento de digitar, mas não toma nenhuma tecla do sistema.
 
 Há também **três perfis** para salvar os seus próprios jogos de teclas, com nome
-editável. Guardam as sete ações, inclusive as opcionais — úteis para alternar
+editável. Guardam as oito ações, inclusive as opcionais — úteis para alternar
 entre teclado com e sem numpad, ou entre o notebook e a mesa de casa.
 
 ### Confirmação de tecla
@@ -106,6 +108,34 @@ perdida corrompe o shoe inteiro em silêncio. Em Ajustes dá para ligar:
   periférica e não para disputar atenção com a mesa.
 - **Som no treino** — separado do som de jogo, porque no treino o áudio responde
   "certo ou errado" e faz sentido mesmo para quem joga no silêncio.
+
+## Overlay de jogada
+
+Além do overlay de contagem, há um segundo overlay que responde a pergunta que
+o primeiro não responde: **o que fazer com esta mão**. Ele lê o mesmo count e
+tem dois modos:
+
+- **Guia** (padrão) — só o que a contagem mudou agora: os desvios que estão
+  valendo, o estado do seguro e qual índice vira em seguida.
+- **Matriz** — o chart completo, mão × carta do dealer, com as células que a
+  contagem mudou em destaque.
+
+No KO os dois modos mostram **estratégia básica**, sem índices: os números
+publicados são de Hi-Lo e a escala do KO é outra, então aplicá-los ali daria
+conselho errado com cara de certo.
+
+Liga em Ajustes, pela bandeja, pelo botão "Jogada" na aba Contagem ou por uma
+tecla, se você atribuir uma.
+
+### Mover e redimensionar
+
+Os dois overlays nascem **travados**, o que os torna click-through: o clique
+atravessa para o jogo. Destrave em Ajustes para posicionar — aí a janela ganha
+uma alcinha no topo (arrastar) e uma alça no canto inferior direito
+(redimensionar) — e trave de volta quando estiver do jeito que você quer.
+
+O tamanho arrastado tem prioridade sobre os três presets. Clicar num preset
+descarta o tamanho arrastado e volta para ele.
 
 ## Sistemas de contagem
 
@@ -225,12 +255,14 @@ mãos não são jogadas: serve para dimensionar banca, não para prever resultad
 
 Ativado pelo botão na janela principal, pelo ícone na bandeja ou por atalho.
 Travado, o mouse atravessa ele (click-through) e ele não rouba foco do jogo.
-Destravado, dá para arrastar; a posição arrastada tem prioridade sobre o canto
-escolhido — clicar num canto nos ajustes descarta a posição arrastada.
+Destravado, dá para arrastar pela alcinha no topo e redimensionar pela alça no
+canto inferior direito; a posição e o tamanho arrastados têm prioridade sobre o
+canto e o preset escolhidos — mexer num dos dois nos ajustes descarta o que foi
+arrastado.
 
-Ajustável: tamanho (P/M/G), opacidade e layout. O layout **mínimo** mostra só o
-número de decisão e a aposta, em corpo grande, para quem quer um número e nada
-mais.
+Ajustável: tamanho (P/M/G, ou livre pela alça), opacidade e layout. O layout
+**mínimo** mostra só o número de decisão e a aposta, em corpo grande, para quem
+quer um número e nada mais.
 
 **Limitação:** o overlay não aparece sobre jogos em *fullscreen exclusivo*
 (DirectX). Rode o jogo em janela ou em borderless/fullscreen-windowed. Essa é
@@ -275,16 +307,19 @@ alimentadas por `src/shared/changelog.ts`. A versão exibida é injetada do
 `package.json` no build, não mantida à mão — número de versão errado na tela é
 pior que número nenhum.
 
-O app checa as Releases do GitHub 30 s depois de abrir e a cada 6 h — ele fica
-dias na bandeja, então rechecar é o que mantém a instalação em dia. O download
-acontece em segundo plano e é diferencial: uma versão nova não baixa os 100 MB
-de novo, só os blocos que mudaram.
+O app checa as Releases do GitHub 10 s depois de abrir, a cada 30 min, e também
+sempre que a janela principal ganha foco (com um piso de 5 min entre checagens,
+para o alt-tab de sempre não virar uma rajada de requisições) — ele fica dias na
+bandeja, então rechecar com frequência é o que mantém a instalação em dia. O
+download acontece em segundo plano e é diferencial: uma versão nova não baixa os
+100 MB de novo, só os blocos que mudaram.
 
-Quando o download termina, o diálogo de reinício **só aparece com a janela
-principal em foco**. Foco, não visibilidade: com dois monitores a janela fica à
-vista o jogo inteiro, e interromper uma mão é exatamente o que este app existe
-para evitar. Jogando, a atualização espera em silêncio. Respondendo "Depois",
-ela entra sozinha no próximo encerramento de verdade (pela bandeja).
+Não existe mais diálogo nativo do Windows para isso. Enquanto baixa, uma pílula
+discreta aparece no rodapé da janela principal com o progresso; pronta, ela
+troca para um botão "Reiniciar", que reinstala em silêncio e reabre o app. A
+pílula é passiva — não interrompe, não rouba foco e pode ser dispensada no ×,
+que só esconde aquela pendência: a atualização já baixada entra sozinha no
+próximo fechamento de verdade (pela bandeja), dispensada ou não.
 
 Falha de rede não vira popup: sem internet o app abre e conta normalmente.
 

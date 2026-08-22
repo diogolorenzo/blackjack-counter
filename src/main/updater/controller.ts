@@ -1,121 +1,148 @@
-import { app, dialog } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 
-import { shouldPromptForUpdate } from './policy'
-import type { UpdatePromptState } from './policy'
+import { shouldCheck, visibleStatus } from './policy'
+import type { UpdateState } from './policy'
+import type { UpdateStatus } from '@shared/types'
 
 // `electron-updater` é CommonJS: o import nomeado quebra no bundle ESM do
 // electron-vite. Desestruturar o default funciona nos dois formatos.
 const { autoUpdater } = electronUpdater
 
 /** Tempo até a primeira checagem: deixa a janela e os hotkeys subirem antes. */
-const FIRST_CHECK_DELAY_MS = 30_000
+const FIRST_CHECK_DELAY_MS = 10_000
 /** O app vive dias na bandeja, então rechecar é o que mantém ele em dia. */
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
+const CHECK_INTERVAL_MS = 30 * 60 * 1000
+/**
+ * Piso entre checagens disparadas por foco ou pelo timer periódico. Alt-tab é
+ * frequente; sem o piso, cada volta para o app viraria um GET. Com o intervalo
+ * de 30min do timer, o piso de 5min nunca chega a barrar uma checagem
+ * periódica legítima — só existe para o caminho de foco, mas os dois
+ * compartilham a mesma política.
+ */
+const MIN_CHECK_GAP_MS = 5 * 60 * 1000
 
 export interface UpdaterController {
+  install(): void
+  dismiss(): void
+  status(): UpdateStatus | null
   dispose(): void
 }
 
 export function createUpdaterController(deps: {
-  getMainWindow: () => BrowserWindow | null
+  broadcast: (status: UpdateStatus | null) => void
 }): UpdaterController {
+  const state: UpdateState = {
+    phase: 'idle',
+    version: null,
+    percent: 0,
+    dismissed: false,
+    lastCheckAt: null
+  }
+
   // Em `electron-vite dev` não existe app empacotado nem app-update.yml: checar
   // aqui só produziria erro a cada boot de desenvolvimento.
-  if (!app.isPackaged) return { dispose: () => {} }
-
-  const state: UpdatePromptState = {
-    pendingVersion: null,
-    dismissed: false,
-    promptOpen: false,
-    mainWindowFocused: false
+  if (!app.isPackaged) {
+    return {
+      install: () => {},
+      dismiss: () => {},
+      status: () => null,
+      dispose: () => {}
+    }
   }
 
   let firstCheck: NodeJS.Timeout | null = null
   let recheck: NodeJS.Timeout | null = null
   let disposed = false
 
-  function mainWindowFocused(): boolean {
-    const win = deps.getMainWindow()
-    return win !== null && win.isFocused()
-  }
-
-  function promptRestart(): void {
-    const win = deps.getMainWindow()
-    if (win === null) return
-
-    const version = state.pendingVersion
-    state.promptOpen = true
-
-    // Preso à janela principal: o diálogo não vira uma janela solta que possa
-    // aparecer por cima do jogo.
-    void dialog
-      .showMessageBox(win, {
-        type: 'info',
-        title: 'Atualização disponível',
-        message: `A versão ${version} do Counter está pronta para instalar.`,
-        detail:
-          'O app reinicia sozinho e volta com a nova versão. Sua contagem atual será perdida.',
-        buttons: ['Reiniciar agora', 'Depois'],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true
-      })
-      .then(({ response }) => {
-        state.promptOpen = false
-        if (response !== 0) {
-          // Não insiste: o autoInstallOnAppQuit aplica no próximo encerramento.
-          state.dismissed = true
-          return
-        }
-        // Silencioso (sem o assistente do NSIS) e reabrindo o app depois.
-        autoUpdater.quitAndInstall(true, true)
-      })
-      .catch(() => {
-        state.promptOpen = false
-      })
-  }
-
-  function maybePrompt(): void {
+  function emit(): void {
     if (disposed) return
-    state.mainWindowFocused = mainWindowFocused()
-    if (shouldPromptForUpdate(state)) promptRestart()
+    deps.broadcast(visibleStatus(state))
   }
 
   function check(): void {
+    if (disposed) return
+    state.lastCheckAt = Date.now()
+    if (state.phase === 'idle' || state.phase === 'error') state.phase = 'checking'
     // Sem rede o updater rejeita; o catch mantém o app em silêncio.
-    autoUpdater.checkForUpdates().catch(() => {})
+    autoUpdater.checkForUpdates().catch(() => {
+      state.phase = 'error'
+      emit()
+    })
+  }
+
+  /**
+   * Consulta a política antes de checar. Usada tanto pelo foco quanto pelo
+   * timer periódico: sem isso, o timer atravessaria a regra de shouldCheck e
+   * bateria no GitHub a cada 30min mesmo com a atualização pronta ou já
+   * baixando.
+   */
+  function checkIfDue(): void {
+    if (!shouldCheck(state, Date.now(), MIN_CHECK_GAP_MS)) return
+    check()
   }
 
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
 
-  autoUpdater.on('update-downloaded', (info) => {
-    state.pendingVersion = info.version
+  autoUpdater.on('update-available', (info) => {
+    state.phase = 'downloading'
+    state.version = info.version
+    state.percent = 0
+    // Pendência nova desarma o "dispensar" da anterior: é outra versão.
     state.dismissed = false
-    maybePrompt()
+    emit()
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    if (state.phase === 'checking') state.phase = 'idle'
+    emit()
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    state.phase = 'downloading'
+    state.percent = Math.round(progress.percent)
+    emit()
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    state.phase = 'ready'
+    state.version = info.version
+    state.percent = 100
+    state.dismissed = false
+    emit()
   })
 
   // Falha de atualização nunca vira popup: o app tem que abrir e contar cartas
   // mesmo offline ou com o GitHub fora do ar.
-  autoUpdater.on('error', () => {})
+  autoUpdater.on('error', () => {
+    state.phase = 'error'
+    emit()
+  })
 
-  // Evento global: pega a janela principal recriada pela bandeja sem que
-  // mainWindow.ts precise saber que o updater existe.
-  app.on('browser-window-focus', maybePrompt)
+  app.on('browser-window-focus', checkIfDue)
 
   firstCheck = setTimeout(check, FIRST_CHECK_DELAY_MS)
-  recheck = setInterval(check, CHECK_INTERVAL_MS)
+  recheck = setInterval(checkIfDue, CHECK_INTERVAL_MS)
 
   return {
+    install: () => {
+      if (state.phase !== 'ready') return
+      // Silencioso (sem o assistente do NSIS) e reabrindo o app depois.
+      autoUpdater.quitAndInstall(true, true)
+    },
+    dismiss: () => {
+      state.dismissed = true
+      emit()
+    },
+    status: () => visibleStatus(state),
     dispose: () => {
       disposed = true
       if (firstCheck !== null) clearTimeout(firstCheck)
       if (recheck !== null) clearInterval(recheck)
       firstCheck = null
       recheck = null
-      app.removeListener('browser-window-focus', maybePrompt)
+      app.removeListener('browser-window-focus', checkIfDue)
       autoUpdater.removeAllListeners()
     }
   }
