@@ -1,3 +1,4 @@
+import type { Size, SizeLimits } from './domain/overlaySize'
 import type {
   BetSpreadRule,
   BetSpreadsBySystem,
@@ -156,6 +157,39 @@ export const OVERLAY_SIZES: Record<OverlaySize, { width: number; height: number 
   small: { width: 190, height: 116 },
   medium: { width: 232, height: 150 },
   large: { width: 288, height: 188 }
+}
+
+/**
+ * Tabela própria do overlay de jogada, indexada por layout: guia e matriz têm
+ * proporções incomparáveis (uma lista de 6 linhas contra um chart de 27 linhas
+ * por 10 colunas), então um único conjunto de presets serviria mal aos dois.
+ */
+export const STRATEGY_OVERLAY_SIZES: Record<'guide' | 'matrix', Record<OverlaySize, Size>> = {
+  guide: {
+    small: { width: 200, height: 124 },
+    medium: { width: 240, height: 156 },
+    large: { width: 290, height: 190 }
+  },
+  matrix: {
+    small: { width: 244, height: 334 },
+    medium: { width: 292, height: 400 },
+    large: { width: 344, height: 470 }
+  }
+}
+
+/**
+ * Faixa do redimensionamento livre pela alça.
+ *
+ * O piso não é estético: sem ele dá para encolher a janela até a própria alça
+ * sumir, e aí o overlay fica num tamanho do qual não se sai mais pelo mouse.
+ */
+export const OVERLAY_SIZE_LIMITS: Record<
+  'count' | 'strategyGuide' | 'strategyMatrix',
+  SizeLimits
+> = {
+  count: { min: { width: 150, height: 92 }, max: { width: 560, height: 340 } },
+  strategyGuide: { min: { width: 170, height: 105 }, max: { width: 520, height: 420 } },
+  strategyMatrix: { min: { width: 210, height: 288 }, max: { width: 620, height: 840 } }
 }
 
 /**
