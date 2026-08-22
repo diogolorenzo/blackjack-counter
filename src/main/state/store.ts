@@ -3,19 +3,30 @@ import { dirname } from 'node:path'
 
 import {
   ALLOWED_DECK_COUNTS,
-  DEFAULT_BET_SPREAD,
+  DEFAULT_BET_SPREADS,
   DEFAULT_SETTINGS,
-  SETTINGS_WRITE_DEBOUNCE_MS
+  OVERLAY_OPACITY_RANGE,
+  SETTINGS_WRITE_DEBOUNCE_MS,
+  emptyBindingProfiles
 } from '@shared/defaults'
 import { validateBetSpread } from '@shared/domain/betSpread'
 import type { DeepPartial } from '@shared/ipc'
-import { HOTKEY_ACTIONS } from '@shared/types'
+import { HOTKEY_ACTIONS, isOptionalHotkeyAction } from '@shared/types'
 import type {
+  BankrollSettings,
   BetSpreadRule,
+  BetSpreadsBySystem,
+  BindingProfile,
   Corner,
+  CountingSystem,
+  CurrencySettings,
+  DeviationsLayout,
+  FeedbackSettings,
   HotkeyAction,
+  OverlayLayout,
   OverlaySettings,
   OverlaySize,
+  Palette,
   Settings,
   ShoeConfig,
   TrueCountRounding
@@ -23,12 +34,23 @@ import type {
 
 const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
 const OVERLAY_SIZE_VALUES: readonly OverlaySize[] = ['small', 'medium', 'large']
+const OVERLAY_LAYOUTS: readonly OverlayLayout[] = ['full', 'minimal']
 const ROUNDING_MODES: readonly TrueCountRounding[] = ['floor', 'nearest']
+const SYSTEMS: readonly CountingSystem[] = ['hilo', 'ko']
+const PALETTES: readonly Palette[] = ['default', 'colorblind']
+const DEVIATIONS_LAYOUTS: readonly DeviationsLayout[] = ['list', 'matrix']
+
+/** Nome de perfil não é dado estruturado: cortar evita um settings.json gigante. */
+const PROFILE_NAME_MAX = 24
 
 const PENETRATION_RANGE = { min: 0.5, max: 0.95 } as const
 const MIN_DECKS_REMAINING_RANGE = { min: 0.25, max: 2 } as const
 const HISTORY_LENGTH_RANGE = { min: 4, max: 16 } as const
 const MARGIN_RANGE = { min: 0, max: 400 } as const
+const VOLUME_RANGE = { min: 0, max: 1 } as const
+const HANDS_PER_HOUR_RANGE = { min: 10, max: 400 } as const
+const RISK_TARGET_RANGE = { min: 0.001, max: 0.9 } as const
+const BANKROLL_RANGE = { min: 0, max: 1e9 } as const
 
 /** Chaves que, atribuídas em objeto literal, alteram o protótipo — JSON externo nunca as define legitimamente. */
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
@@ -76,6 +98,10 @@ function pickInteger(value: unknown, min: number, max: number, fallback: number)
   return Math.round(pickNumber(value, min, max, fallback))
 }
 
+function pickString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : fallback
+}
+
 function sanitizeDeckCount(value: unknown): number {
   return typeof value === 'number' && (ALLOWED_DECK_COUNTS as readonly number[]).includes(value)
     ? value
@@ -88,29 +114,43 @@ function sanitizeUnitValue(value: unknown): number {
     : DEFAULT_SETTINGS.unitValue
 }
 
-function sanitizeBetSpread(value: unknown): BetSpreadRule[] {
-  if (!Array.isArray(value)) return cloneDefaultBetSpread()
+function cloneSpread(rules: readonly BetSpreadRule[]): BetSpreadRule[] {
+  return rules.map((rule) => ({ ...rule }))
+}
+
+function sanitizeOneSpread(value: unknown, fallback: readonly BetSpreadRule[]): BetSpreadRule[] {
+  if (!Array.isArray(value)) return cloneSpread(fallback)
   const rules = value.filter(isPlainObject).map((rule) => ({
     minTrueCount: Number(rule.minTrueCount),
     units: Number(rule.units)
   }))
-  const { ok, normalized } = validateBetSpread(rules)
-  return ok ? normalized : cloneDefaultBetSpread()
+  const { ok, normalized } = validateBetSpread(rules, fallback)
+  return ok ? normalized : cloneSpread(fallback)
 }
 
-function cloneDefaultBetSpread(): BetSpreadRule[] {
-  return DEFAULT_BET_SPREAD.map((rule) => ({ ...rule }))
+function sanitizeBetSpreads(value: unknown): BetSpreadsBySystem {
+  const raw = isPlainObject(value) ? value : {}
+  return {
+    hilo: sanitizeOneSpread(raw.hilo, DEFAULT_BET_SPREADS.hilo),
+    ko: sanitizeOneSpread(raw.ko, DEFAULT_BET_SPREADS.ko)
+  }
 }
 
+/**
+ * Bind vazia é legítima só nas ações opcionais. As quatro de contagem sempre
+ * caem no default: um app de contagem sem tecla de contagem não é um estado que
+ * o usuário possa querer, mesmo que o JSON diga que sim.
+ */
 function sanitizeBindings(value: unknown): Record<HotkeyAction, string> {
   const source = isPlainObject(value) ? value : {}
   const out = {} as Record<HotkeyAction, string>
   for (const action of HOTKEY_ACTIONS) {
     const accelerator = source[action]
-    out[action] =
-      typeof accelerator === 'string' && accelerator.trim() !== ''
-        ? accelerator.trim()
-        : DEFAULT_SETTINGS.bindings[action]
+    if (typeof accelerator === 'string' && accelerator.trim() !== '') {
+      out[action] = accelerator.trim()
+      continue
+    }
+    out[action] = isOptionalHotkeyAction(action) ? '' : DEFAULT_SETTINGS.bindings[action]
   }
   return out
 }
@@ -118,6 +158,8 @@ function sanitizeBindings(value: unknown): Record<HotkeyAction, string> {
 function sanitizeShoe(value: unknown): ShoeConfig {
   const raw = isPlainObject(value) ? value : {}
   return {
+    system: pickEnum(raw.system, SYSTEMS, DEFAULT_SETTINGS.shoe.system),
+    surrender: pickBoolean(raw.surrender, DEFAULT_SETTINGS.shoe.surrender),
     deckCount: sanitizeDeckCount(raw.deckCount),
     penetration: pickNumber(
       raw.penetration,
@@ -154,6 +196,13 @@ function sanitizeOverlay(value: unknown): OverlaySettings {
     corner: pickEnum(raw.corner, CORNERS, fallback.corner),
     margin: pickInteger(raw.margin, MARGIN_RANGE.min, MARGIN_RANGE.max, fallback.margin),
     size: pickEnum(raw.size, OVERLAY_SIZE_VALUES, fallback.size),
+    layout: pickEnum(raw.layout, OVERLAY_LAYOUTS, fallback.layout),
+    opacity: pickNumber(
+      raw.opacity,
+      OVERLAY_OPACITY_RANGE.min,
+      OVERLAY_OPACITY_RANGE.max,
+      fallback.opacity
+    ),
     locked: pickBoolean(raw.locked, fallback.locked),
     visible: pickBoolean(raw.visible, fallback.visible),
     customPosition: sanitizeCustomPosition(raw.customPosition),
@@ -167,15 +216,102 @@ function sanitizeOverlay(value: unknown): OverlaySettings {
   }
 }
 
+function sanitizeCurrency(value: unknown): CurrencySettings {
+  const raw = isPlainObject(value) ? value : {}
+  const fallback = DEFAULT_SETTINGS.currency
+  const code = pickString(raw.code, fallback.code).toUpperCase()
+  return {
+    // Um código fora do ISO 4217 faz o Intl lançar; a checagem acontece aqui e
+    // não no formatador, que roda a cada snapshot.
+    code: /^[A-Z]{3}$/.test(code) ? code : fallback.code,
+    locale: pickString(raw.locale, fallback.locale)
+  }
+}
+
+function sanitizeBankroll(value: unknown): BankrollSettings {
+  const raw = isPlainObject(value) ? value : {}
+  const fallback = DEFAULT_SETTINGS.bankroll
+  return {
+    amount: pickNumber(raw.amount, BANKROLL_RANGE.min, BANKROLL_RANGE.max, fallback.amount),
+    handsPerHour: pickInteger(
+      raw.handsPerHour,
+      HANDS_PER_HOUR_RANGE.min,
+      HANDS_PER_HOUR_RANGE.max,
+      fallback.handsPerHour
+    ),
+    targetRiskOfRuin: pickNumber(
+      raw.targetRiskOfRuin,
+      RISK_TARGET_RANGE.min,
+      RISK_TARGET_RANGE.max,
+      fallback.targetRiskOfRuin
+    )
+  }
+}
+
+function sanitizeFeedback(value: unknown): FeedbackSettings {
+  const raw = isPlainObject(value) ? value : {}
+  const fallback = DEFAULT_SETTINGS.feedback
+  return {
+    sound: pickBoolean(raw.sound, fallback.sound),
+    volume: pickNumber(raw.volume, VOLUME_RANGE.min, VOLUME_RANGE.max, fallback.volume),
+    flash: pickBoolean(raw.flash, fallback.flash),
+    drillSound: pickBoolean(raw.drillSound, fallback.drillSound)
+  }
+}
+
+/**
+ * Os slots são posicionais e de tamanho fixo: um slot corrompido volta a ser
+ * vazio, mas nunca some da lista, senão "Perfil 2" viraria "Perfil 1" na UI e o
+ * usuário carregaria as teclas erradas.
+ */
+function sanitizeBindingProfiles(value: unknown): BindingProfile[] {
+  const source = Array.isArray(value) ? value : []
+  return emptyBindingProfiles().map((empty, index) => {
+    const raw = source[index]
+    if (!isPlainObject(raw)) return empty
+
+    const name = typeof raw.name === 'string' && raw.name.trim() !== ''
+      ? raw.name.trim().slice(0, PROFILE_NAME_MAX)
+      : empty.name
+
+    // Perfil sem bindings é slot vazio; com bindings, passa pela mesma
+    // sanitização das teclas em vigor.
+    const bindings = isPlainObject(raw.bindings) ? sanitizeBindings(raw.bindings) : null
+    return { id: empty.id, name, bindings }
+  })
+}
+
+/**
+ * Settings da v0.1 tinham um único `betSpread` (Hi-Lo). Ele vira o spread de
+ * Hi-Lo e o de KO nasce do padrão — perder o spread ajustado à mão numa
+ * atualização seria a pior forma de estrear a versão nova.
+ */
+function migrateLegacy(raw: Record<string, unknown>): Record<string, unknown> {
+  if (raw.betSpreads !== undefined || !Array.isArray(raw.betSpread)) return raw
+  const { betSpread, ...rest } = raw
+  return { ...rest, betSpreads: { hilo: betSpread, ko: DEFAULT_BET_SPREADS.ko } }
+}
+
 /** Merge profundo sobre os defaults + clamp de cada campo. Aceita qualquer lixo e sempre devolve Settings válido. */
 function sanitizeSettings(raw: unknown): Settings {
-  const merged = isPlainObject(raw) ? mergeRecords(asRecord(DEFAULT_SETTINGS), raw) : {}
+  const source = isPlainObject(raw) ? migrateLegacy(raw) : {}
+  const merged = mergeRecords(asRecord(DEFAULT_SETTINGS), source)
   return {
     shoe: sanitizeShoe(merged.shoe),
     bindings: sanitizeBindings(merged.bindings),
     hotkeysEnabled: pickBoolean(merged.hotkeysEnabled, DEFAULT_SETTINGS.hotkeysEnabled),
-    betSpread: sanitizeBetSpread(merged.betSpread),
+    betSpreads: sanitizeBetSpreads(merged.betSpreads),
     unitValue: sanitizeUnitValue(merged.unitValue),
+    currency: sanitizeCurrency(merged.currency),
+    bankroll: sanitizeBankroll(merged.bankroll),
+    feedback: sanitizeFeedback(merged.feedback),
+    palette: pickEnum(merged.palette, PALETTES, DEFAULT_SETTINGS.palette),
+    deviationsLayout: pickEnum(
+      merged.deviationsLayout,
+      DEVIATIONS_LAYOUTS,
+      DEFAULT_SETTINGS.deviationsLayout
+    ),
+    bindingProfiles: sanitizeBindingProfiles(merged.bindingProfiles),
     overlay: sanitizeOverlay(merged.overlay)
   }
 }
@@ -189,6 +325,11 @@ function readSettings(filePath: string): Settings {
   } catch {
     return sanitizeSettings(null)
   }
+}
+
+/** O spread em vigor é o do sistema ativo; os dois ficam guardados lado a lado. */
+export function activeBetSpread(settings: Settings): BetSpreadRule[] {
+  return settings.betSpreads[settings.shoe.system] ?? settings.betSpreads.hilo
 }
 
 export class SettingsStore {

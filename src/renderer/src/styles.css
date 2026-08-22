@@ -12,8 +12,23 @@
   --color-pos: #34d399;
   --color-neg: #f87171;
   --color-warn: #fbbf24;
-  /* Já tem alfa embutido: usar sem modificador de opacidade. */
-  --color-overlay: rgba(11, 15, 20, 0.82);
+  /* A opacidade é ajustável no overlay; o alfa vem de uma variável para que
+     mudar o slider não exija recompilar classe nenhuma. */
+  --overlay-alpha: 0.82;
+  --color-overlay: rgba(11, 15, 20, var(--overlay-alpha));
+}
+
+/*
+  Paleta segura para daltonismo (Okabe-Ito). Verde/vermelho é o par que some em
+  deuteranopia e protanopia — justo os dois estados que mais importam aqui, "a
+  contagem está a favor" e "está contra". Azul/laranja/amarelo se mantêm
+  distinguíveis nos três tipos comuns.
+*/
+:root[data-palette='colorblind'],
+body[data-palette='colorblind'] {
+  --color-pos: #56b4e9;
+  --color-neg: #e69f00;
+  --color-warn: #f0e442;
 }
 
 @layer base {
@@ -79,5 +94,69 @@
   .app-drag textarea,
   .app-drag a {
     -webkit-app-region: no-drag;
+  }
+
+  /*
+    Confirmação de tecla registrada.
+
+    Com o jogo em foco não existe nenhuma outra prova de que a tecla chegou, e
+    uma tecla perdida corrompe o shoe em silêncio. O pulso é curto de propósito:
+    tem que ser percebido pela visão periférica sem disputar atenção com a mesa.
+  */
+  @keyframes counter-pulse {
+    0% {
+      box-shadow: 0 0 0 0 var(--pulse-color, rgba(230, 237, 243, 0.55));
+    }
+    100% {
+      box-shadow: 0 0 0 6px rgba(0, 0, 0, 0);
+    }
+  }
+
+  .counter-pulse {
+    animation: counter-pulse 220ms ease-out;
+  }
+
+  /*
+    Marca de carta nova no treino.
+
+    Sem ela, duas cartas iguais seguidas (7 depois de 7) parecem a mesma carta
+    parada na tela: o jogador não conta a segunda e o erro só aparece no
+    resultado. A troca precisa ser visível mesmo quando o desenho não muda, daí
+    o movimento e a barra — e não uma mudança de cor, que some quando o glifo é
+    idêntico.
+  */
+  @keyframes counter-card-in {
+    0% {
+      opacity: 0.25;
+      transform: translateY(-6px) scale(0.94);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(0) scale(1.02);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .counter-card-in {
+    animation: counter-card-in 170ms ease-out;
+  }
+
+  @keyframes counter-card-mark {
+    0% {
+      transform: scaleX(0);
+      opacity: 1;
+    }
+    100% {
+      transform: scaleX(1);
+      opacity: 0;
+    }
+  }
+
+  .counter-card-mark {
+    transform-origin: left center;
+    animation: counter-card-mark var(--card-mark-ms, 260ms) linear;
   }
 }

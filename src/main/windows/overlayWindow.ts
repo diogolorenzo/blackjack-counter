@@ -144,7 +144,9 @@ export function createOverlayController(
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false
+        sandbox: false,
+        // Idem à janela principal: o som vem de hotkey global, nunca de gesto.
+        autoplayPolicy: 'no-user-gesture-required'
       }
     })
 

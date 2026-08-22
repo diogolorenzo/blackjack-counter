@@ -1,9 +1,11 @@
 import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 
+import { simulateRisk } from '@shared/domain/risk'
+import type { RiskResult } from '@shared/domain/risk'
 import { IPC } from '@shared/ipc'
 import type { DeepPartial, SetBindingResult } from '@shared/ipc'
-import { HOTKEY_ACTIONS } from '@shared/types'
+import { HOTKEY_ACTIONS, isOptionalHotkeyAction } from '@shared/types'
 import type {
   AppSnapshot,
   Corner,
@@ -11,11 +13,13 @@ import type {
   HotkeyAction,
   OverlaySettings,
   OverlaySize,
-  Settings
+  Settings,
+  ShoeRecord
 } from '@shared/types'
 
 import type { HotkeyManager } from '../hotkeys/manager'
 import type { SessionController } from '../state/sessionController'
+import { activeBetSpread } from '../state/store'
 import type { OverlayController } from '../windows/overlayWindow'
 
 const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
@@ -130,8 +134,12 @@ export function registerIpcHandlers(deps: {
     const normalized = next.toLowerCase()
     // Checado aqui, e não no HotkeyManager: lá o 'conflict' cairia sobre a ação
     // de ordem posterior, que pode ser justamente a que o usuário NÃO editou.
+    // Ações sem tecla ('') nunca colidem entre si.
     const duplicated = HOTKEY_ACTIONS.some(
-      (other) => other !== action && settings.bindings[other].toLowerCase() === normalized
+      (other) =>
+        other !== action &&
+        settings.bindings[other] !== '' &&
+        settings.bindings[other].toLowerCase() === normalized
     )
     if (duplicated) {
       return { ok: false, reason: 'conflict', effective: previous }
@@ -151,6 +159,43 @@ export function registerIpcHandlers(deps: {
     return { ok: true, effective: next }
   }
 
+  /** Só ações opcionais podem ficar sem tecla; as de contagem não. */
+  const clearBinding = (action: unknown): SetBindingResult => {
+    const settings = controller.getSnapshot().settings
+    if (!isHotkeyAction(action)) return { ok: false, reason: 'invalid', effective: '' }
+    if (!isOptionalHotkeyAction(action)) {
+      return { ok: false, reason: 'invalid', effective: settings.bindings[action] }
+    }
+
+    const bindings = { ...settings.bindings, [action]: '' }
+    const status = hotkeys.apply(bindings, settings.hotkeysEnabled)
+    controller.updateSettings({ bindings })
+    controller.setHotkeyStatus(status)
+    return { ok: true, effective: '' }
+  }
+
+  const runRiskSimulation = (): RiskResult | null => {
+    const settings = controller.getSnapshot().settings
+    return simulateRisk({
+      system: settings.shoe.system,
+      deckCount: settings.shoe.deckCount,
+      penetration: settings.shoe.penetration,
+      rounding: settings.shoe.trueCountRounding,
+      minDecksRemaining: settings.shoe.minDecksRemaining,
+      spread: activeBetSpread(settings),
+      unitValue: settings.unitValue,
+      bankroll: settings.bankroll.amount,
+      handsPerHour: settings.bankroll.handsPerHour,
+      targetRiskOfRuin: settings.bankroll.targetRiskOfRuin
+    })
+  }
+
+  const setShoeResult = (id: unknown, result: unknown): ShoeRecord[] => {
+    if (typeof id !== 'string' || id === '') return controller.getHistory()
+    const value = result === null || result === undefined ? null : Number(result)
+    return controller.setShoeResult(id, value !== null && Number.isFinite(value) ? value : null)
+  }
+
   handle(IPC.stateGet, () => controller.getSnapshot())
 
   handle(IPC.countApply, (delta) =>
@@ -159,6 +204,9 @@ export function registerIpcHandlers(deps: {
   handle(IPC.countUndo, () => controller.undo())
   handle(IPC.countRedo, () => controller.redo())
   handle(IPC.countNewShoe, () => controller.newShoe())
+  handle(IPC.sessionAcknowledgeRestore, () => controller.acknowledgeRestore())
+  handle(IPC.sessionStart, () => controller.startSession())
+  handle(IPC.sessionEnd, () => controller.endSession())
 
   handle(IPC.settingsGet, () => controller.getSnapshot().settings)
   // O cast é seguro porque o SettingsStore sanitiza campo a campo; aqui só barramos
@@ -170,6 +218,7 @@ export function registerIpcHandlers(deps: {
   )
 
   handle(IPC.hotkeysSetBinding, (action, accelerator) => setBinding(action, accelerator))
+  handle(IPC.hotkeysClearBinding, (action) => clearBinding(action))
   handle(IPC.hotkeysSetCaptureMode, (capturing) => {
     if (typeof capturing === 'boolean') hotkeys.setCaptureMode(capturing)
   })
@@ -196,6 +245,12 @@ export function registerIpcHandlers(deps: {
   handle(IPC.overlaySetSize, (size) =>
     isOverlaySize(size) ? applyPatch({ overlay: { size } }) : controller.getSnapshot()
   )
+
+  handle(IPC.historyGet, () => controller.getHistory())
+  handle(IPC.historySetResult, (id, result) => setShoeResult(id, result))
+  handle(IPC.historyClear, () => controller.clearHistory())
+
+  handle(IPC.riskSimulate, () => runRiskSimulation())
 
   handle(IPC.numLockReport, (on) => {
     if (typeof on === 'boolean') controller.setNumLock(on)

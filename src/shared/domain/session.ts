@@ -46,6 +46,18 @@ export class CountingSession {
     return top !== undefined && top.op === 'newShoe'
   }
 
+  /**
+   * true quando o próximo redo REFAZ um "novo shoe".
+   *
+   * Quem chama precisa saber disso antes de chamar redo(): o registro do shoe
+   * no histórico foi removido pelo undo e tem que voltar junto, senão o
+   * histórico e a contagem contam histórias diferentes.
+   */
+  get redoAppliesShoe(): boolean {
+    const top = this.redoStack[this.redoStack.length - 1]
+    return top !== undefined && top.op === 'newShoe'
+  }
+
   /** id e at são INJETADOS — o domínio é puro, não chama Date.now nem crypto. */
   apply(delta: Delta, meta: { id: string; at: number }): void {
     this.pushUndoFrame('apply')

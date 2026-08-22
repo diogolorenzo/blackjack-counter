@@ -6,8 +6,11 @@ import type { HotkeyAction, HotkeyStatus } from '@shared/types'
 export interface HotkeyRecorderProps {
   action: HotkeyAction
   label: string
+  /** String vazia = ação opcional sem tecla atribuída. */
   accelerator: string
   status: HotkeyStatus
+  /** Ações opcionais podem voltar a ficar sem tecla; as de contagem, não. */
+  optional?: boolean
 }
 
 interface Notice {
@@ -109,7 +112,13 @@ function describeResult(result: SetBindingResult, requested: string): Notice | n
   return { tone: 'error', text: 'Tecla inválida para atalho global.' }
 }
 
-export function HotkeyRecorder({ action, label, accelerator, status }: HotkeyRecorderProps) {
+export function HotkeyRecorder({
+  action,
+  label,
+  accelerator,
+  status,
+  optional = false
+}: HotkeyRecorderProps) {
   const [recording, setRecording] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const submitting = useRef(false)
@@ -169,6 +178,15 @@ export function HotkeyRecorder({ action, label, accelerator, status }: HotkeyRec
     setRecording((value) => !value)
   }
 
+  const clear = (): void => {
+    setNotice(null)
+    window.counter
+      .clearBinding(action)
+      .catch(() => setNotice({ tone: 'error', text: 'Falha ao remover o atalho.' }))
+  }
+
+  const unbound = accelerator.trim() === ''
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
@@ -176,7 +194,7 @@ export function HotkeyRecorder({ action, label, accelerator, status }: HotkeyRec
 
         <div className="flex shrink-0 items-center gap-1.5">
           {!recording && status === 'conflict' && <span className="ui-label text-neg">ocupada</span>}
-          {!recording && status === 'disabled' && <span className="ui-label">off</span>}
+          {!recording && status === 'disabled' && !unbound && <span className="ui-label">off</span>}
 
           <button
             type="button"
@@ -184,11 +202,32 @@ export function HotkeyRecorder({ action, label, accelerator, status }: HotkeyRec
             className={`h-6 min-w-[86px] rounded-md border px-2 text-[11px] transition-colors duration-100 ${
               recording
                 ? 'border-warn/60 bg-warn/10 text-warn'
-                : 'border-border bg-bg text-fg hover:bg-fg/5'
+                : unbound
+                  ? 'border-dashed border-border bg-bg text-muted hover:text-fg'
+                  : 'border-border bg-bg text-fg hover:bg-fg/5'
             }`}
           >
-            {recording ? 'Pressione…' : accelerator}
+            {recording ? 'Pressione…' : unbound ? 'sem tecla' : accelerator}
           </button>
+
+          {optional && !recording && !unbound && (
+            <button
+              type="button"
+              onClick={clear}
+              aria-label={`Remover atalho de ${label}`}
+              title="Devolver a tecla ao sistema"
+              className="h-6 w-6 rounded border border-border text-muted transition-colors duration-100 hover:border-neg/50 hover:text-neg"
+            >
+              <svg viewBox="0 0 10 10" aria-hidden="true" className="mx-auto h-2.5 w-2.5">
+                <path
+                  d="M1.5 1.5l7 7M8.5 1.5l-7 7"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

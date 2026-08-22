@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { SettingsStore } from '../src/main/state/store'
-import { SessionController } from '../src/main/state/sessionController'
 import { DEFAULT_SETTINGS, DEFAULT_BET_SPREAD } from '../src/shared/defaults'
+import { newController } from './helpers'
 
 function tmpFile(): string {
   return join(mkdtempSync(join(tmpdir(), 'counter-')), 'settings.json')
@@ -64,8 +64,8 @@ describe('SettingsStore probe', () => {
 
   it('bad betSpread -> default', () => {
     const p = tmpFile()
-    writeFileSync(p, JSON.stringify({ betSpread: [{ minTrueCount: 2, units: -1 }] }))
-    expect(new SettingsStore(p).get().betSpread).toEqual(DEFAULT_BET_SPREAD)
+    writeFileSync(p, JSON.stringify({ betSpreads: { hilo: [{ minTrueCount: 2, units: -1 }] } }))
+    expect(new SettingsStore(p).get().betSpreads.hilo).toEqual(DEFAULT_BET_SPREAD)
   })
 
   it('write is debounced and atomic; flush forces', async () => {
@@ -92,6 +92,117 @@ describe('SettingsStore probe', () => {
     expect(b.get().overlay.customPosition).toEqual({ x: 10, y: 20 })
   })
 
+  it('trocar de perfil não apaga as teclas opcionais que o usuário atribuiu', () => {
+    const store = new SettingsStore(tmpFile())
+    store.update({ bindings: { newShoe: 'F9', toggleOverlay: 'F10' } })
+
+    // O perfil só define as quatro de contagem; o merge tem que preservar o resto.
+    store.update({ bindings: { low: 'numadd', neutral: 'nummult', high: 'numsub', undo: 'numdiv' } })
+
+    expect(store.get().bindings).toEqual({
+      low: 'numadd',
+      neutral: 'nummult',
+      high: 'numsub',
+      undo: 'numdiv',
+      redo: '',
+      newShoe: 'F9',
+      toggleOverlay: 'F10'
+    })
+  })
+
+  it('tecla vazia só é aceita nas ações opcionais', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ bindings: { low: '', redo: '', newShoe: '  ' } }))
+    const bindings = new SettingsStore(p).get().bindings
+
+    expect(bindings.low).toBe(DEFAULT_SETTINGS.bindings.low)
+    expect(bindings.redo).toBe('')
+    expect(bindings.newShoe).toBe('')
+  })
+
+  it('settings da v0.1 migram o betSpread único para o spread de Hi-Lo', () => {
+    const p = tmpFile()
+    const legacy = [
+      { minTrueCount: 3, units: 6 },
+      { minTrueCount: -99, units: 1 }
+    ]
+    writeFileSync(p, JSON.stringify({ betSpread: legacy, unitValue: 50 }))
+    const settings = new SettingsStore(p).get()
+
+    expect(settings.betSpreads.hilo).toEqual(legacy)
+    expect(settings.betSpreads.ko).toEqual(DEFAULT_SETTINGS.betSpreads.ko)
+    expect(settings.unitValue).toBe(50)
+    expect((settings as unknown as Record<string, unknown>).betSpread).toBeUndefined()
+  })
+
+  it('moeda inválida cai no padrão em vez de quebrar o Intl', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ currency: { code: 'reais', locale: '' } }))
+    expect(new SettingsStore(p).get().currency).toEqual(DEFAULT_SETTINGS.currency)
+  })
+
+  it('nascem três slots de perfil, todos vazios', () => {
+    const profiles = new SettingsStore(tmpFile()).get().bindingProfiles
+    expect(profiles).toHaveLength(3)
+    expect(profiles.every((slot) => slot.bindings === null)).toBe(true)
+    expect(profiles.map((slot) => slot.id)).toEqual(['slot-1', 'slot-2', 'slot-3'])
+  })
+
+  it('guarda e devolve um perfil salvo', () => {
+    const p = tmpFile()
+    const store = new SettingsStore(p)
+    const saved = { ...store.get().bindings, low: 'numadd' }
+
+    store.update({
+      bindingProfiles: [
+        { id: 'slot-1', name: 'Notebook', bindings: saved },
+        ...store.get().bindingProfiles.slice(1)
+      ]
+    })
+    store.flush()
+
+    const reopened = new SettingsStore(p).get().bindingProfiles
+    expect(reopened[0]?.name).toBe('Notebook')
+    expect(reopened[0]?.bindings?.low).toBe('numadd')
+    expect(reopened[1]?.bindings).toBeNull()
+  })
+
+  it('slot corrompido volta a ser vazio sem tirar os outros do lugar', () => {
+    const p = tmpFile()
+    writeFileSync(
+      p,
+      JSON.stringify({
+        bindingProfiles: [
+          'não é objeto',
+          { id: 'qualquer', name: 'Mesa', bindings: { low: 'F5' } },
+          { name: '   ' }
+        ]
+      })
+    )
+    const profiles = new SettingsStore(p).get().bindingProfiles
+
+    expect(profiles).toHaveLength(3)
+    // A posição é o que identifica o slot na UI: o id vem do slot, não do arquivo.
+    expect(profiles[0]?.bindings).toBeNull()
+    expect(profiles[1]?.id).toBe('slot-2')
+    expect(profiles[1]?.name).toBe('Mesa')
+    // Perfil salvo com bindings incompletas ganha os defaults das teclas de contagem.
+    expect(profiles[1]?.bindings?.low).toBe('F5')
+    expect(profiles[1]?.bindings?.neutral).toBe(DEFAULT_SETTINGS.bindings.neutral)
+    expect(profiles[2]?.name).toBe('Perfil 3')
+  })
+
+  it('nome de perfil é cortado em 24 caracteres', () => {
+    const store = new SettingsStore(tmpFile())
+    store.update({
+      bindingProfiles: [
+        { id: 'slot-1', name: 'x'.repeat(80), bindings: null },
+        ...store.get().bindingProfiles.slice(1)
+      ]
+    })
+    expect(store.get().bindingProfiles[0]?.name).toHaveLength(24)
+  })
+
   it('rejects prototype pollution from disk', () => {
     const p = tmpFile()
     writeFileSync(p, '{"__proto__":{"polluted":true}}')
@@ -102,8 +213,7 @@ describe('SettingsStore probe', () => {
 
 describe('SessionController probe', () => {
   it('broadcasts on every mutation and recomputes derived', () => {
-    const store = new SettingsStore(tmpFile())
-    const c = new SessionController(store)
+    const c = newController()
     const seen: number[] = []
     const off = c.onChange((s) => seen.push(s.derived.runningCount))
 
@@ -125,14 +235,14 @@ describe('SessionController probe', () => {
   })
 
   it('entries get unique ids', () => {
-    const c = new SessionController(new SettingsStore(tmpFile()))
+    const c = newController()
     for (let i = 0; i < 30; i += 1) c.apply(1)
     const ids = new Set(c.getSnapshot().recentEntries.map((e) => e.id))
     expect(ids.size).toBe(c.getSnapshot().recentEntries.length)
   })
 
   it('recentEntries capped at MAX_HISTORY, newest first', () => {
-    const c = new SessionController(new SettingsStore(tmpFile()))
+    const c = newController()
     for (let i = 0; i < 40; i += 1) c.apply(i % 2 === 0 ? 1 : -1)
     const r = c.getSnapshot().recentEntries
     expect(r).toHaveLength(24)
@@ -140,15 +250,15 @@ describe('SessionController probe', () => {
   })
 
   it('changing deckCount recomputes true count with no new card', () => {
-    const c = new SessionController(new SettingsStore(tmpFile()))
+    const c = newController()
     for (let i = 0; i < 26; i += 1) c.apply(1)
-    const six = c.getSnapshot().derived.trueCountExact
-    const one = c.updateSettings({ shoe: { deckCount: 1 } }).derived.trueCountExact
+    const six = c.getSnapshot().derived.trueCountExact ?? 0
+    const one = c.updateSettings({ shoe: { deckCount: 1 } }).derived.trueCountExact ?? 0
     expect(one).toBeGreaterThan(six)
   })
 
   it('undo/redo with no history returns same snapshot without emitting', () => {
-    const c = new SessionController(new SettingsStore(tmpFile()))
+    const c = newController()
     let emits = 0
     c.onChange(() => (emits += 1))
     c.undo()
@@ -157,7 +267,7 @@ describe('SessionController probe', () => {
   })
 
   it('setNumLock dedupes', () => {
-    const c = new SessionController(new SettingsStore(tmpFile()))
+    const c = newController()
     let emits = 0
     c.onChange(() => (emits += 1))
     c.setNumLock(true)
@@ -168,7 +278,7 @@ describe('SessionController probe', () => {
   })
 
   it('a throwing listener does not stop the others', () => {
-    const c = new SessionController(new SettingsStore(tmpFile()))
+    const c = newController()
     let reached = false
     c.onChange(() => {
       throw new Error('window destroyed')

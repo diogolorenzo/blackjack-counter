@@ -2,6 +2,7 @@
  * Contrato IPC tipado. Importado por main, preload e os dois renderers, de
  * forma que nome de canal e payload sejam checados nas duas pontas.
  */
+import type { RiskResult } from './domain/risk'
 import type {
   AppSnapshot,
   Corner,
@@ -9,7 +10,8 @@ import type {
   HotkeyAction,
   HotkeyStatus,
   OverlaySize,
-  Settings
+  Settings,
+  ShoeRecord
 } from './types'
 
 /** Renderer -> Main, via ipcRenderer.invoke (sempre aguardado). */
@@ -19,15 +21,23 @@ export const IPC = {
   countUndo: 'count:undo',
   countRedo: 'count:redo',
   countNewShoe: 'count:newShoe',
+  sessionAcknowledgeRestore: 'session:acknowledgeRestore',
+  sessionStart: 'session:start',
+  sessionEnd: 'session:end',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
   hotkeysSetBinding: 'hotkeys:setBinding',
+  hotkeysClearBinding: 'hotkeys:clearBinding',
   hotkeysSetCaptureMode: 'hotkeys:setCaptureMode',
   hotkeysSetEnabled: 'hotkeys:setEnabled',
   overlaySetVisible: 'overlay:setVisible',
   overlaySetLocked: 'overlay:setLocked',
   overlaySetCorner: 'overlay:setCorner',
   overlaySetSize: 'overlay:setSize',
+  historyGet: 'history:get',
+  historySetResult: 'history:setResult',
+  historyClear: 'history:clear',
+  riskSimulate: 'risk:simulate',
   numLockReport: 'numlock:report',
   windowMinimize: 'window:minimize',
   windowClose: 'window:close'
@@ -56,11 +66,19 @@ export interface CounterApi {
   undo(): Promise<AppSnapshot>
   redo(): Promise<AppSnapshot>
   newShoe(): Promise<AppSnapshot>
+  /** Some com o aviso de sessão recuperada sem mexer na contagem. */
+  acknowledgeRestore(): Promise<AppSnapshot>
+
+  /** Abre a sessão: a partir daqui os shoes encerrados vão para o histórico. */
+  startSession(): Promise<AppSnapshot>
+  endSession(): Promise<AppSnapshot>
 
   getSettings(): Promise<Settings>
   updateSettings(patch: DeepPartial<Settings>): Promise<AppSnapshot>
 
   setBinding(action: HotkeyAction, accelerator: string): Promise<SetBindingResult>
+  /** Só para as ações opcionais; as quatro de contagem não podem ficar sem tecla. */
+  clearBinding(action: HotkeyAction): Promise<SetBindingResult>
   setCaptureMode(capturing: boolean): Promise<void>
   setHotkeysEnabled(enabled: boolean): Promise<AppSnapshot>
 
@@ -68,6 +86,13 @@ export interface CounterApi {
   setOverlayLocked(locked: boolean): Promise<AppSnapshot>
   setOverlayCorner(corner: Corner, margin?: number): Promise<AppSnapshot>
   setOverlaySize(size: OverlaySize): Promise<AppSnapshot>
+
+  getHistory(): Promise<ShoeRecord[]>
+  setShoeResult(id: string, result: number | null): Promise<ShoeRecord[]>
+  clearHistory(): Promise<ShoeRecord[]>
+
+  /** Simula com as settings em vigor. null quando o sistema ativo não tem modelo de vantagem. */
+  simulateRisk(): Promise<RiskResult | null>
 
   /** O renderer detecta NumLock via KeyboardEvent.getModifierState e reporta ao main. */
   reportNumLock(on: boolean): Promise<void>

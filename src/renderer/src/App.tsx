@@ -1,27 +1,39 @@
 import { useEffect, useState } from 'react'
 
 import { isNumLockDependent } from '@shared/defaults'
-import { bucketLabel, bucketToDelta, formatSigned } from '@shared/format'
+import { bucketRankLabel, systemProfile } from '@shared/domain/system'
+import { bucketToDelta, formatSigned } from '@shared/format'
 import type { DeepPartial } from '@shared/ipc'
 import { HOTKEY_ACTIONS } from '@shared/types'
 import type { Bucket, HotkeyAction, HotkeyStatus, Settings } from '@shared/types'
 
 import { BetSuggestion } from '@/components/BetSuggestion'
 import { CountDisplay } from '@/components/CountDisplay'
+import { DeviationTable } from '@/components/DeviationTable'
+import { DrillPanel } from '@/components/DrillPanel'
+import { HelpPanel } from '@/components/HelpPanel'
+import { HistoryPanel } from '@/components/HistoryPanel'
 import { HistoryStrip } from '@/components/HistoryStrip'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { ShoeMeter } from '@/components/ShoeMeter'
+import { TabBar } from '@/components/TabBar'
+import type { Tab } from '@/components/TabBar'
 import { TitleBar } from '@/components/TitleBar'
+import { secondaryCount } from '@/countView'
 import { useCounterState } from '@/useCounterState'
+import { useFeedback } from '@/useFeedback'
 
 /** Confirmação de "novo shoe" se desarma sozinha: botão armado esquecido é um clique perdido. */
 const NEW_SHOE_CONFIRM_MS = 4000
 
 const ACTION_LABELS: Record<HotkeyAction, string> = {
-  low: '2-6',
-  neutral: '7-9',
-  high: '10-A',
-  undo: 'Undo'
+  low: '+1',
+  neutral: '0',
+  high: '−1',
+  undo: 'Undo',
+  redo: 'Redo',
+  newShoe: 'Shoe',
+  toggleOverlay: 'Overlay'
 }
 
 const STATUS_LABELS: Record<HotkeyStatus, string> = {
@@ -104,10 +116,20 @@ function ActionButton({
 
 export function App() {
   const { snapshot } = useCounterState()
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [tab, setTab] = useState<Tab>('count')
   const [confirmNewShoe, setConfirmNewShoe] = useState(false)
 
   useNumLockReporter()
+
+  const overlayVisible = snapshot?.settings.overlay.visible ?? false
+  // Uma janela só toca o tick, senão vem dobrado: com o overlay à mostra, ele é
+  // quem está na frente do jogador.
+  const { pulsing } = useFeedback(snapshot, { playSound: !overlayVisible })
+
+  const palette = snapshot?.settings.palette ?? 'default'
+  useEffect(() => {
+    document.body.dataset.palette = palette
+  }, [palette])
 
   useEffect(() => {
     if (!confirmNewShoe) return
@@ -115,15 +137,10 @@ export function App() {
     return () => window.clearTimeout(timer)
   }, [confirmNewShoe])
 
-  const toggleSettings = (): void => {
-    setConfirmNewShoe(false)
-    setSettingsOpen((open) => !open)
-  }
-
   if (snapshot === null) {
     return (
       <div className="flex h-full flex-col">
-        <TitleBar settingsOpen={false} onToggleSettings={toggleSettings} />
+        <TitleBar systemLabel="Hi-Lo" />
         <div className="flex flex-1 items-center justify-center">
           <span className="ui-label">Carregando</span>
         </div>
@@ -132,6 +149,8 @@ export function App() {
   }
 
   const { derived, settings, hotkeyStatus } = snapshot
+  const profile = systemProfile(settings.shoe.system)
+  const secondary = secondaryCount(derived)
 
   const patch = (value: DeepPartial<Settings>): void => {
     void window.counter.updateSettings(value)
@@ -152,17 +171,98 @@ export function App() {
     (action) => hotkeyStatus[action] === 'ok' && isNumLockDependent(settings.bindings[action])
   )
 
+  const boundActions = HOTKEY_ACTIONS.filter((action) => settings.bindings[action] !== '')
+
   return (
     <div className="flex h-full flex-col">
-      <TitleBar settingsOpen={settingsOpen} onToggleSettings={toggleSettings} />
+      <TitleBar systemLabel={profile.label} />
+      <TabBar
+        active={tab}
+        onSelect={setTab}
+        showDeviations={settings.shoe.system === 'hilo'}
+        sessionIdle={!snapshot.session.active}
+      />
 
-      {settingsOpen ? (
+      {snapshot.sessionRestored && (
+        <div className="flex items-center gap-2 border-b border-warn/40 bg-warn/10 px-3 py-2 text-[11px] leading-snug text-warn">
+          <span className="flex-1">
+            Shoe recuperado do encerramento anterior: {derived.cardsSeen} cartas.
+          </span>
+          <button
+            type="button"
+            onClick={() => void window.counter.acknowledgeRestore()}
+            className="shrink-0 rounded border border-warn/50 px-2 py-0.5 transition-colors duration-100 hover:bg-warn/20"
+          >
+            Manter
+          </button>
+          <button
+            type="button"
+            onClick={() => void window.counter.newShoe()}
+            className="shrink-0 rounded border border-warn/50 px-2 py-0.5 transition-colors duration-100 hover:bg-warn/20"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
+
+      {tab === 'settings' && (
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           <SettingsPanel settings={settings} hotkeyStatus={hotkeyStatus} onPatch={patch} />
         </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-2.5">
-          <CountDisplay runningCount={derived.runningCount} trueCount={derived.trueCountExact} />
+      )}
+
+      {tab === 'deviations' && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <DeviationTable
+            system={settings.shoe.system}
+            decisionCount={derived.decisionCount}
+            layout={settings.deviationsLayout}
+            surrender={settings.shoe.surrender}
+            insuranceOn={derived.insuranceOn}
+            onLayoutChange={(deviationsLayout) => patch({ deviationsLayout })}
+          />
+        </div>
+      )}
+
+      {tab === 'drill' && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <DrillPanel
+            system={settings.shoe.system}
+            bindings={settings.bindings}
+            feedback={settings.feedback}
+          />
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <HistoryPanel
+            settings={settings}
+            session={snapshot.session}
+            shoeStartedAt={snapshot.shoeStats.startedAt}
+          />
+        </div>
+      )}
+
+      {tab === 'help' && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <HelpPanel settings={settings} onNavigate={setTab} />
+        </div>
+      )}
+
+      {tab === 'count' && (
+        <div
+          className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-3 pt-2.5 ${
+            pulsing ? 'counter-pulse' : ''
+          }`}
+        >
+          <CountDisplay
+            runningCount={derived.runningCount}
+            secondaryLabel={secondary.label}
+            secondaryValue={secondary.value}
+            secondaryTone={secondary.tone}
+            advantagePct={derived.advantagePct}
+          />
 
           <ShoeMeter
             cardsSeen={derived.cardsSeen}
@@ -175,13 +275,16 @@ export function App() {
           <BetSuggestion
             units={derived.betUnits}
             unitValue={settings.unitValue}
+            currency={settings.currency}
             showCurrency={settings.overlay.showCurrency}
             insuranceOn={derived.insuranceOn}
+            evPerHandUnits={derived.evPerHandUnits}
           />
 
           <HistoryStrip
             entries={snapshot.recentEntries}
             limit={settings.overlay.historyLength}
+            system={settings.shoe.system}
           />
 
           <div className="grid grid-cols-3 gap-1.5">
@@ -195,7 +298,7 @@ export function App() {
                   className={`flex h-10 flex-col items-center justify-center gap-0.5 rounded-md border bg-surface transition-colors duration-100 ${tone}`}
                 >
                   <span className="tnum text-[13px] font-semibold leading-none">
-                    {bucketLabel(bucket)}
+                    {bucketRankLabel(settings.shoe.system, bucket)}
                   </span>
                   <span className="tnum text-[10px] leading-none opacity-70">
                     {formatSigned(delta)}
@@ -220,7 +323,7 @@ export function App() {
             <ActionButton
               label={confirmNewShoe ? 'Confirmar?' : 'Novo shoe'}
               tone={confirmNewShoe ? 'warn' : 'default'}
-              title="Zera a contagem do shoe atual"
+              title="Encerra o shoe atual, grava no histórico e zera a contagem"
               onClick={handleNewShoe}
             />
             <ActionButton
@@ -250,7 +353,7 @@ export function App() {
           )}
 
           <div className="mt-auto grid grid-cols-4 gap-1.5 border-t border-border pt-2">
-            {HOTKEY_ACTIONS.map((action) => (
+            {boundActions.map((action) => (
               <div
                 key={action}
                 className="flex min-w-0 flex-col gap-1"

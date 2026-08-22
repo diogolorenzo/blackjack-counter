@@ -29,8 +29,8 @@ vi.mock('electron', () => ({
 }))
 
 const { SettingsStore } = await import('../src/main/state/store')
-const { SessionController } = await import('../src/main/state/sessionController')
 const { HotkeyManager } = await import('../src/main/hotkeys/manager')
+const { binds, statuses, newController } = await import('./helpers')
 const { registerIpcHandlers } = await import('../src/main/ipc/handlers')
 const { IPC } = await import('../src/shared/ipc')
 const { HOTKEY_REPEAT_DEBOUNCE_MS } = await import('../src/shared/defaults')
@@ -51,9 +51,9 @@ describe('HotkeyManager', () => {
   it('registers every binding and reports ok', () => {
     const fired: string[] = []
     const m = new HotkeyManager((a) => fired.push(a))
-    const status = m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    const status = m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
 
-    expect(status).toEqual({ low: 'ok', neutral: 'ok', high: 'ok', undo: 'ok' })
+    expect(status).toEqual(statuses({ low: 'ok', neutral: 'ok', high: 'ok', undo: 'ok' }))
     expect([...shortcuts.keys()]).toEqual(['F1', 'F2', 'F3', 'F4'])
 
     shortcuts.get('F1')?.()
@@ -67,27 +67,22 @@ describe('HotkeyManager', () => {
       return true
     }
     const m = new HotkeyManager(() => {})
-    const status = m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    const status = m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
 
-    expect(status).toEqual({ low: 'ok', neutral: 'conflict', high: 'conflict', undo: 'ok' })
+    expect(status).toEqual(statuses({ low: 'ok', neutral: 'conflict', high: 'conflict', undo: 'ok' }))
     expect([...shortcuts.keys()]).toEqual(['F1', 'F4'])
   })
 
   it('enabled=false registers nothing and reports disabled', () => {
     const m = new HotkeyManager(() => {})
-    const status = m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, false)
-    expect(status).toEqual({
-      low: 'disabled',
-      neutral: 'disabled',
-      high: 'disabled',
-      undo: 'disabled'
-    })
+    const status = m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), false)
+    expect(status).toEqual(statuses({}))
     expect(shortcuts.size).toBe(0)
   })
 
   it('two actions on the same key: second is a conflict, first still works', () => {
     const m = new HotkeyManager(() => {})
-    const status = m.apply({ low: 'F1', neutral: 'F1', high: 'F3', undo: 'F4' }, true)
+    const status = m.apply(binds({ low: 'F1', neutral: 'F1', high: 'F3', undo: 'F4' }), true)
     expect(status.low).toBe('ok')
     expect(status.neutral).toBe('conflict')
     expect(shortcuts.size).toBe(3)
@@ -96,7 +91,7 @@ describe('HotkeyManager', () => {
   it('debounces the Windows auto-repeat train but allows a real second press', async () => {
     const fired: string[] = []
     const m = new HotkeyManager((a) => fired.push(a))
-    m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
     const key = shortcuts.get('F1')
 
     key?.()
@@ -114,7 +109,7 @@ describe('HotkeyManager', () => {
   it('debounce is per action', () => {
     const fired: string[] = []
     const m = new HotkeyManager((a) => fired.push(a))
-    m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
     shortcuts.get('F1')?.()
     shortcuts.get('F2')?.()
     shortcuts.get('F3')?.()
@@ -123,7 +118,7 @@ describe('HotkeyManager', () => {
 
   it('capture mode releases every key and restores it afterwards', () => {
     const m = new HotkeyManager(() => {})
-    m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
     expect(shortcuts.size).toBe(4)
 
     m.setCaptureMode(true)
@@ -136,7 +131,7 @@ describe('HotkeyManager', () => {
   it('apply() during capture mode leaves nothing registered', () => {
     const m = new HotkeyManager(() => {})
     m.setCaptureMode(true)
-    const status = m.apply({ low: 'F5', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    const status = m.apply(binds({ low: 'F5', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
     expect(status.low).toBe('ok')
     expect(shortcuts.size).toBe(0)
 
@@ -147,7 +142,7 @@ describe('HotkeyManager', () => {
   it('dispose unregisters and stops firing', () => {
     const fired: string[] = []
     const m = new HotkeyManager((a) => fired.push(a))
-    m.apply({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }, true)
+    m.apply(binds({ low: 'F1', neutral: 'F2', high: 'F3', undo: 'F4' }), true)
     const key = shortcuts.get('F1')
     m.dispose()
     key?.()
@@ -157,7 +152,7 @@ describe('HotkeyManager', () => {
 
 function harness() {
   const store = new SettingsStore(tmpFile())
-  const controller = new SessionController(store)
+  const controller = newController(store)
   const hotkeys = new HotkeyManager(() => {})
   const overlayCalls: string[] = []
   const overlay = {
@@ -319,5 +314,75 @@ describe('registerIpcHandlers', () => {
     call(IPC.countApply, 1)
     expect(call(IPC.stateGet)).toBe(controller.getSnapshot())
     expect(call(IPC.settingsGet)).toEqual(controller.getSnapshot().settings)
+  })
+
+  it('clearBinding só solta as ações opcionais', () => {
+    const { call, controller } = harness()
+
+    call(IPC.hotkeysSetBinding, 'newShoe', 'F9')
+    expect(controller.getSnapshot().settings.bindings.newShoe).toBe('F9')
+    expect([...shortcuts.keys()]).toContain('F9')
+
+    const cleared = call(IPC.hotkeysClearBinding, 'newShoe') as { ok: boolean; effective: string }
+    expect(cleared).toEqual({ ok: true, effective: '' })
+    expect(controller.getSnapshot().settings.bindings.newShoe).toBe('')
+    expect(controller.getSnapshot().hotkeyStatus.newShoe).toBe('disabled')
+    expect([...shortcuts.keys()]).not.toContain('F9')
+
+    // Uma ação de contagem sem tecla tornaria o app inútil.
+    const refused = call(IPC.hotkeysClearBinding, 'low') as { ok: boolean; effective: string }
+    expect(refused).toEqual({ ok: false, reason: 'invalid', effective: 'F1' })
+    expect(controller.getSnapshot().settings.bindings.low).toBe('F1')
+  })
+
+  it('duas opcionais sem tecla não colidem entre si', () => {
+    const { call, controller } = harness()
+    const result = call(IPC.hotkeysSetBinding, 'redo', 'F10') as { ok: boolean }
+    expect(result.ok).toBe(true)
+    expect(controller.getSnapshot().settings.bindings.redo).toBe('F10')
+    expect(controller.getSnapshot().settings.bindings.newShoe).toBe('')
+  })
+
+  it('as ações novas chegam do hotkey ao controller', () => {
+    const { call, controller } = harness()
+    call(IPC.sessionStart)
+    call(IPC.countApply, 1)
+    call(IPC.countApply, 1)
+    expect(controller.getSnapshot().derived.cardsSeen).toBe(2)
+
+    call(IPC.countNewShoe)
+    expect(controller.getSnapshot().derived.cardsSeen).toBe(0)
+    expect((call(IPC.historyGet) as unknown[]).length).toBe(1)
+  })
+
+  it('histórico: grava resultado, limpa e ignora id inexistente', () => {
+    const { call } = harness()
+    call(IPC.sessionStart)
+    call(IPC.countApply, 1)
+    call(IPC.countNewShoe)
+
+    const [saved] = call(IPC.historyGet) as { id: string; result: number | null }[]
+    expect(saved?.result).toBeNull()
+
+    const updated = call(IPC.historySetResult, saved?.id, -250) as { result: number | null }[]
+    expect(updated[0]?.result).toBe(-250)
+
+    expect(() => call(IPC.historySetResult, 42, 'muito')).not.toThrow()
+    expect(call(IPC.historyClear)).toEqual([])
+  })
+
+  it('riskSimulate usa as settings em vigor e devolve null em KO', () => {
+    const { call } = harness()
+    const hilo = call(IPC.riskSimulate) as { evPerHandUnits: number } | null
+    expect(hilo?.evPerHandUnits).toBeGreaterThan(0)
+
+    call(IPC.settingsUpdate, { shoe: { system: 'ko' } })
+    expect(call(IPC.riskSimulate)).toBeNull()
+  })
+
+  it('acknowledgeRestore é inofensivo quando não houve recuperação', () => {
+    const { call, controller } = harness()
+    expect(() => call(IPC.sessionAcknowledgeRestore)).not.toThrow()
+    expect(controller.getSnapshot().sessionRestored).toBe(false)
   })
 })
