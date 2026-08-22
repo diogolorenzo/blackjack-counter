@@ -19,6 +19,16 @@ export function ResizeGrip({ kind }: { kind: OverlayKind }) {
   const onMove = useCallback(
     (event: MouseEvent) => {
       if (!dragging.current) return
+      // O mouseup pode ter caído fora da janela (alt-tab no meio do gesto, ou
+      // soltar o botão fora dos limites), e aí ele nunca chega até aqui.
+      // `buttons === 0` é a prova de que o botão já foi solto em algum lugar
+      // que não vimos: sem esta guarda o overlay ficaria preso em `dragging`
+      // e passaria a perseguir o cursor a cada mousemove seguinte, mesmo sem
+      // nenhum botão pressionado.
+      if (event.buttons === 0) {
+        dragging.current = false
+        return
+      }
       void window.counter.resizeOverlay(kind, {
         width: event.screenX - window.screenX,
         height: event.screenY - window.screenY

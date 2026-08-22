@@ -33,7 +33,7 @@ describe('ResizeGrip', () => {
 
     const grip = screen.getByRole('slider', { name: /redimensionar/i })
     fireEvent.mouseDown(grip, { screenX: 332, screenY: 200 })
-    fireEvent.mouseMove(window, { screenX: 432, screenY: 260 })
+    fireEvent.mouseMove(window, { screenX: 432, screenY: 260, buttons: 1 })
 
     expect(calls).toEqual([{ kind: 'count', width: 332, height: 210 }])
   })
@@ -47,7 +47,28 @@ describe('ResizeGrip', () => {
     const grip = screen.getByRole('slider', { name: /redimensionar/i })
     fireEvent.mouseDown(grip, { screenX: 200, screenY: 150 })
     fireEvent.mouseUp(window, { screenX: 200, screenY: 150 })
-    fireEvent.mouseMove(window, { screenX: 400, screenY: 300 })
+    fireEvent.mouseMove(window, { screenX: 400, screenY: 300, buttons: 1 })
+
+    expect(calls).toEqual([])
+  })
+
+  /**
+   * Regressão: se o mouseup acontece fora da janela (alt-tab no meio do
+   * arrasto, ou soltar o botão fora dos limites), ele nunca chega aos
+   * listeners do window. `buttons: 0` no primeiro mousemove simula esse botão
+   * já solto — sem a guarda, `dragging` ficaria preso em `true` e o overlay
+   * passaria a perseguir o cursor a partir daí.
+   */
+  it('encerra o gesto se o mousemove chegar sem nenhum botão pressionado', () => {
+    mountApi()
+    window.screenX = 0
+    window.screenY = 0
+    render(<ResizeGrip kind="count" />)
+
+    const grip = screen.getByRole('slider', { name: /redimensionar/i })
+    fireEvent.mouseDown(grip, { screenX: 200, screenY: 150 })
+    fireEvent.mouseMove(window, { screenX: 400, screenY: 300, buttons: 0 })
+    fireEvent.mouseMove(window, { screenX: 450, screenY: 350, buttons: 1 })
 
     expect(calls).toEqual([])
   })
