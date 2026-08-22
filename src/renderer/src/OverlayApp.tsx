@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 
-import { DEFAULT_SETTINGS, OVERLAY_SIZES } from '@shared/defaults'
+import { DEFAULT_SETTINGS } from '@shared/defaults'
 import { formatCurrency, formatSigned, formatUnits } from '@shared/format'
 import { CARDS_PER_DECK } from '@shared/types'
-import type { Derived, Entry, OverlaySize } from '@shared/types'
+import type { Derived, Entry } from '@shared/types'
 
 import { BetSuggestion } from '@/components/BetSuggestion'
 import { CountDisplay } from '@/components/CountDisplay'
@@ -12,6 +12,7 @@ import { ShoeMeter } from '@/components/ShoeMeter'
 import { secondaryCount } from '@/countView'
 import { useCounterState } from '@/useCounterState'
 import { useFeedback } from '@/useFeedback'
+import { useWindowSize } from '@/useWindowSize'
 
 /**
  * Canvas fixo em que o layout é desenhado, depois reduzido/ampliado por `zoom`
@@ -56,11 +57,6 @@ const LOADING_DERIVED: Derived = {
   shoeExhausted: false
 }
 
-function contentScale(size: OverlaySize, designHeight: number): number {
-  const { width, height } = OVERLAY_SIZES[size]
-  return Math.min(width / DESIGN_WIDTH, height / designHeight)
-}
-
 /**
  * Travado o overlay é click-through: a borda só delimita, nunca convida ao clique.
  *
@@ -78,11 +74,12 @@ function edgeTone(locked: boolean, insuranceOn: boolean, shoeExhausted: boolean)
 
 export function OverlayApp() {
   const { snapshot } = useCounterState()
+  const windowSize = useWindowSize()
 
   const settings = snapshot?.settings ?? DEFAULT_SETTINGS
   const derived = snapshot?.derived ?? LOADING_DERIVED
   const entries = snapshot?.recentEntries ?? NO_ENTRIES
-  const { locked, size, layout, opacity, historyLength, showCurrency } = settings.overlay
+  const { locked, layout, opacity, historyLength, showCurrency } = settings.overlay
 
   // Escondido, o overlay continua vivo como janela: sem esta condição o tick
   // sairia duas vezes, uma aqui e outra na janela principal.
@@ -114,7 +111,10 @@ export function OverlayApp() {
 
       <div
         className="flex flex-col gap-1 p-2"
-        style={{ width: DESIGN_WIDTH, zoom: contentScale(size, designHeight) }}
+        style={{
+          width: DESIGN_WIDTH,
+          zoom: Math.min(windowSize.width / DESIGN_WIDTH, windowSize.height / designHeight)
+        }}
       >
         {minimal ? (
           <div className="flex items-end justify-between gap-3">
