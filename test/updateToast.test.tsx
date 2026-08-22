@@ -54,4 +54,15 @@ describe('UpdateToast', () => {
     await screen.findByText('37%')
     expect(screen.queryByRole('button', { name: 'Reiniciar' })).toBeNull()
   })
+
+  /**
+   * O tipo de UpdateStatus não estreita version por phase: mesmo pronta, ele
+   * continua string | null. Sem fallback, isso vira a string "null" na tela.
+   */
+  it('versão nula não vira a string "null" na tela', async () => {
+    installApi({ phase: 'ready', version: null, percent: 100 })
+    const { container } = render(<UpdateToast />)
+    await screen.findByRole('button', { name: 'Reiniciar' })
+    expect(container.textContent).not.toContain('null')
+  })
 })

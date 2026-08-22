@@ -13,12 +13,16 @@ export function UpdateToast() {
   if (status === null) return null
 
   const ready = status.phase === 'ready'
+  // O tipo não estreita por phase: version continua string | null mesmo
+  // pronta ou baixando. Sem fallback, uma falha upstream que broadcast a
+  // versão como null vira literalmente "null" na cara do jogador.
+  const versao = status.version ?? '—'
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center px-3">
       <div className="update-toast pointer-events-auto flex max-w-full items-center gap-2.5 rounded-full border border-border bg-overlay px-3 py-1.5 text-[11px] shadow-lg backdrop-blur-md">
-        <span className="truncate text-fg">
-          {ready ? `Versão ${status.version} pronta` : `Baixando ${status.version}`}
+        <span className="min-w-0 truncate text-fg">
+          {ready ? `Versão ${versao} pronta` : `Baixando ${versao}`}
         </span>
 
         {!ready && (
