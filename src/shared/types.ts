@@ -319,3 +319,13 @@ export const CARDS_PER_DECK = 52
 
 /** A partir daqui o jogador tem vantagem — usado no tempo de vantagem e no tom da bandeja. */
 export const ADVANTAGE_COUNT = 2
+
+export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+
+/** Estado da atualização como a janela principal precisa ver. */
+export interface UpdateStatus {
+  phase: 'downloading' | 'ready'
+  version: string | null
+  /** 0..100. */
+  percent: number
+}

@@ -1,60 +1,85 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldPromptForUpdate } from '../src/main/updater/policy'
-import type { UpdatePromptState } from '../src/main/updater/policy'
+import { shouldCheck, visibleStatus } from '../src/main/updater/policy'
+import type { UpdateState } from '../src/main/updater/policy'
 
-const idle: UpdatePromptState = {
-  pendingVersion: null,
+const idle: UpdateState = {
+  phase: 'idle',
+  version: null,
+  percent: 0,
   dismissed: false,
-  promptOpen: false,
-  mainWindowFocused: false
+  lastCheckAt: null
 }
 
-describe('shouldPromptForUpdate', () => {
-  it('sem atualização baixada -> não pergunta', () => {
-    expect(shouldPromptForUpdate({ ...idle, mainWindowFocused: true })).toBe(false)
+describe('visibleStatus', () => {
+  it('parado não mostra nada', () => {
+    expect(visibleStatus(idle)).toBeNull()
   })
 
-  it('baixada com a janela principal em foco -> pergunta', () => {
-    expect(
-      shouldPromptForUpdate({ ...idle, pendingVersion: '0.2.0', mainWindowFocused: true })
-    ).toBe(true)
+  /** Checagem em andamento não é notícia: a pílula só aparece quando há o quê dizer. */
+  it('checando não mostra nada', () => {
+    expect(visibleStatus({ ...idle, phase: 'checking' })).toBeNull()
   })
 
   /**
-   * O caso que o app existe para proteger. Note que "visível" não serviria:
-   * com dois monitores a janela fica à vista o jogo inteiro. Só o foco
-   * distingue "ele está olhando para o Counter" de "ele está na mesa".
+   * Falha de atualização nunca vira alerta: o app tem que abrir e contar cartas
+   * com o GitHub fora do ar.
    */
-  it('baixada sem foco (jogando) -> segura o diálogo', () => {
-    expect(shouldPromptForUpdate({ ...idle, pendingVersion: '0.2.0' })).toBe(false)
+  it('erro não mostra nada', () => {
+    expect(visibleStatus({ ...idle, phase: 'error' })).toBeNull()
   })
 
-  it('a mesma pendência dispara quando a janela recebe foco', () => {
-    const pending = { ...idle, pendingVersion: '0.2.0' }
-    expect(shouldPromptForUpdate(pending)).toBe(false)
-    expect(shouldPromptForUpdate({ ...pending, mainWindowFocused: true })).toBe(true)
-  })
-
-  it('depois de "Depois" não pergunta de novo', () => {
+  it('baixando mostra versão e progresso', () => {
     expect(
-      shouldPromptForUpdate({
-        ...idle,
-        pendingVersion: '0.2.0',
-        mainWindowFocused: true,
-        dismissed: true
-      })
-    ).toBe(false)
+      visibleStatus({ ...idle, phase: 'downloading', version: '0.3.0', percent: 37 })
+    ).toEqual({ phase: 'downloading', version: '0.3.0', percent: 37 })
   })
 
-  it('com o diálogo já aberto não abre um segundo', () => {
+  it('pronta mostra a versão', () => {
+    expect(visibleStatus({ ...idle, phase: 'ready', version: '0.3.0', percent: 100 })).toEqual({
+      phase: 'ready',
+      version: '0.3.0',
+      percent: 100
+    })
+  })
+
+  it('dispensada some, mesmo pronta', () => {
     expect(
-      shouldPromptForUpdate({
-        ...idle,
-        pendingVersion: '0.2.0',
-        mainWindowFocused: true,
-        promptOpen: true
-      })
-    ).toBe(false)
+      visibleStatus({ ...idle, phase: 'ready', version: '0.3.0', dismissed: true })
+    ).toBeNull()
+  })
+
+  it('dispensada some também durante o download', () => {
+    expect(
+      visibleStatus({ ...idle, phase: 'downloading', version: '0.3.0', dismissed: true })
+    ).toBeNull()
+  })
+})
+
+describe('shouldCheck', () => {
+  it('nunca checado -> checa', () => {
+    expect(shouldCheck(idle, 1_000, 300_000)).toBe(true)
+  })
+
+  it('dentro da janela mínima -> não checa', () => {
+    expect(shouldCheck({ ...idle, lastCheckAt: 1_000 }, 200_000, 300_000)).toBe(false)
+  })
+
+  it('passada a janela mínima -> checa', () => {
+    expect(shouldCheck({ ...idle, lastCheckAt: 1_000 }, 400_000, 300_000)).toBe(true)
+  })
+
+  /**
+   * Já baixada e pronta, checar de novo é tráfego à toa: o autoUpdater não tem
+   * o que fazer com uma segunda resposta igual.
+   */
+  it('com atualização pronta -> não checa', () => {
+    expect(shouldCheck({ ...idle, phase: 'ready', version: '0.3.0' }, 999_999, 300_000)).toBe(
+      false
+    )
+  })
+
+  it('baixando -> não checa', () => {
+    expect(shouldCheck({ ...idle, phase: 'downloading' }, 999_999, 300_000)).toBe(false)
   })
 })
