@@ -30,16 +30,34 @@ Quem já instalou não precisa baixar nada de novo — o app se atualiza sozinho
 (veja [Atualizações](#atualizações)). Para lançar uma versão:
 
 1. suba a `version` no `package.json`;
-2. rode o comando abaixo, com um token do GitHub em `GH_TOKEN`.
+2. **crie a release como rascunho antes de publicar** (veja a armadilha abaixo);
+3. rode o comando abaixo, com um token do GitHub em `GH_TOKEN`.
+
+```bash
+gh release create v0.3.0 --draft --title 0.3.0 --notes "o que mudou"
+```
 
 ```bash
 npm run build:win -- --publish always
 ```
 
-Isso empacota e sobe para as Releases do repositório o `.exe`, o `.blockmap`
-(usado no download diferencial) e o `latest.yml` — o arquivo que os apps
-instalados leem para descobrir que existe versão nova. Sem os três, o
-auto-update não enxerga a release.
+Isso sobe para a release o `.exe`, o `.blockmap` (usado no download diferencial)
+e o `latest.yml` — o arquivo que os apps instalados leem para descobrir que
+existe versão nova. Sem os três, o auto-update não enxerga a release.
+
+Por último, tire do rascunho — **enquanto for draft, nenhum app instalado
+enxerga a atualização**:
+
+```bash
+gh release edit v0.3.0 --draft=false
+```
+
+**A armadilha:** se a release ainda não existir, o electron-builder sobe os
+artefatos em paralelo e cada publisher cria uma release própria com a mesma tag
+— o resultado são dois rascunhos, um com o `.exe` e outro só com o `.blockmap`,
+e um auto-update quebrado. Criar o rascunho antes faz os dois publishers
+escreverem no mesmo lugar. Se acontecer mesmo assim, confira com
+`gh api repos/diogolorenzo/blackjack-counter/releases` antes de publicar.
 
 ## Atalhos
 
