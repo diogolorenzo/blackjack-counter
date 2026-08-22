@@ -112,33 +112,58 @@ export function StrategyGrid({
                   const isSelected =
                     selected?.handKey === line.row.id && selected.upcard === cell.upcard
 
+                  const label = `${line.row.label} contra ${cell.upcard}: ${PLAY_LABELS[action]}`
+                  const cellClass = `tnum relative flex w-full items-center justify-center rounded-[3px] border font-semibold transition-colors duration-100 ${
+                    compact ? 'h-4' : 'h-5'
+                  } ${
+                    deviated
+                      ? 'border-pos bg-pos/20 text-pos'
+                      : isSelected
+                        ? `border-muted bg-fg/10 ${ACTION_TONE[action]}`
+                        : `border-transparent bg-surface ${ACTION_TONE[action]}`
+                  }`
+                  const content = (
+                    <>
+                      {PLAY_CODES[action]}
+                      {countAware && cell.hasDeviation && !deviated && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-[1px] top-[1px] h-[3px] w-[3px] rounded-full bg-muted"
+                        />
+                      )}
+                    </>
+                  )
+
                   return (
                     <td key={cell.upcard} className="p-0">
-                      <button
-                        type="button"
-                        disabled={onSelect === undefined}
-                        onClick={() =>
-                          onSelect?.(isSelected ? null : { handKey: line.row.id, upcard: cell.upcard })
-                        }
-                        aria-label={`${line.row.label} contra ${cell.upcard}: ${PLAY_LABELS[action]}`}
-                        className={`tnum relative flex w-full items-center justify-center rounded-[3px] border font-semibold transition-colors duration-100 ${
-                          compact ? 'h-4' : 'h-5'
-                        } ${
-                          deviated
-                            ? 'border-pos bg-pos/20 text-pos'
-                            : isSelected
-                              ? `border-muted bg-fg/10 ${ACTION_TONE[action]}`
-                              : `border-transparent bg-surface ${ACTION_TONE[action]}`
-                        }`}
-                      >
-                        {PLAY_CODES[action]}
-                        {countAware && cell.hasDeviation && !deviated && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute right-[1px] top-[1px] h-[3px] w-[3px] rounded-full bg-muted"
-                          />
-                        )}
-                      </button>
+                      {onSelect === undefined ? (
+                        /*
+                          Sem onSelect a célula não é um controle, e um <button>
+                          desabilitado aqui custa caro no overlay: são ~270 deles,
+                          e a regra `.app-drag button { -webkit-app-region: no-drag }`
+                          é de hit-test do compositor, aplicada mesmo em botão
+                          desabilitado — o corpo inteiro da matriz deixava de
+                          arrastar a janela, sobrando só a moldura de ~10px.
+
+                          role="img" e não um span cru porque o conteúdo visível é
+                          uma letra codificada: a leitura útil é "16 contra 10:
+                          parar", não "F".
+                        */
+                        <span role="img" aria-label={label} className={cellClass}>
+                          {content}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSelect(isSelected ? null : { handKey: line.row.id, upcard: cell.upcard })
+                          }
+                          aria-label={label}
+                          className={cellClass}
+                        >
+                          {content}
+                        </button>
+                      )}
                     </td>
                   )
                 })}

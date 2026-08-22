@@ -26,7 +26,9 @@ describe('StrategyOverlayApp', () => {
       })
     )
     render(<StrategyOverlayApp />)
-    expect(await screen.findByRole('button', { name: /^16 contra 10:/ })).toBeTruthy()
+    // Célula de leitura é span com role="img": botão desabilitado tiraria o
+    // arrasto da janela pela regra .app-drag button { no-drag }.
+    expect(await screen.findByRole('img', { name: /^16 contra 10:/ })).toBeTruthy()
   })
 
   /**
