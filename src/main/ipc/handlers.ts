@@ -11,6 +11,7 @@ import type {
   Corner,
   Delta,
   HotkeyAction,
+  OverlayPlacement,
   OverlaySettings,
   OverlaySize,
   Settings,
@@ -49,13 +50,14 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function placementChanged(before: OverlaySettings, after: OverlaySettings): boolean {
+function placementChanged(before: OverlayPlacement, after: OverlayPlacement): boolean {
   return (
     before.corner !== after.corner ||
     before.margin !== after.margin ||
-    before.size !== after.size ||
     before.customPosition?.x !== after.customPosition?.x ||
-    before.customPosition?.y !== after.customPosition?.y
+    before.customPosition?.y !== after.customPosition?.y ||
+    before.customSize?.width !== after.customSize?.width ||
+    before.customSize?.height !== after.customSize?.height
   )
 }
 
@@ -89,19 +91,29 @@ export function registerIpcHandlers(deps: {
     controller.setHotkeyStatus(hotkeys.apply(after.bindings, after.hotkeysEnabled))
   }
 
-  const syncOverlay = (before: OverlaySettings, after: OverlaySettings): void => {
+  /**
+   * `presetChanged` entra por fora porque `size` e `layout` moram nos tipos
+   * concretos de cada overlay, não em OverlayPlacement — e nos dois casos eles
+   * mudam o tamanho da janela.
+   */
+  const syncOverlay = (
+    before: OverlayPlacement,
+    after: OverlayPlacement,
+    presetChanged: boolean,
+    target: OverlayController
+  ): void => {
     if (!after.visible) {
-      if (before.visible) overlay.setVisible(false)
+      if (before.visible) target.setVisible(false)
       return
     }
 
     // Ao aparecer, a janela pode ter sido criada agora e não tem nada aplicado:
     // posição e lock precisam ser reenviados mesmo que os valores não tenham mudado.
     const appearing = !before.visible
-    overlay.ensure()
-    if (appearing || placementChanged(before, after)) overlay.applyPlacement(after)
-    if (appearing || before.locked !== after.locked) overlay.setLocked(after.locked)
-    if (appearing) overlay.setVisible(true)
+    target.ensure()
+    if (appearing || presetChanged || placementChanged(before, after)) target.applyPlacement()
+    if (appearing || before.locked !== after.locked) target.setLocked(after.locked)
+    if (appearing) target.setVisible(true)
   }
 
   /**
@@ -114,7 +126,12 @@ export function registerIpcHandlers(deps: {
     const before = controller.getSnapshot().settings
     const after = controller.updateSettings(patch).settings
     syncHotkeys(before, after)
-    syncOverlay(before.overlay, after.overlay)
+    syncOverlay(
+      before.overlay,
+      after.overlay,
+      before.overlay.size !== after.overlay.size || before.overlay.layout !== after.overlay.layout,
+      overlay
+    )
     return controller.getSnapshot()
   }
 

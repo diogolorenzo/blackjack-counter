@@ -163,6 +163,7 @@ function harness() {
     setVisible: (v: boolean) => overlayCalls.push(`setVisible:${v}`),
     setLocked: (v: boolean) => overlayCalls.push(`setLocked:${v}`),
     applyPlacement: () => overlayCalls.push('applyPlacement'),
+    resizeTo: () => overlayCalls.push('resizeTo'),
     get: () => null,
     destroy: () => overlayCalls.push('destroy')
   }

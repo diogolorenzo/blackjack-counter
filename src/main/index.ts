@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 
+import { OVERLAY_SIZES, OVERLAY_SIZE_LIMITS } from '@shared/defaults'
 import { IPC_EVENTS } from '@shared/ipc'
 import type { AppSnapshot, HotkeyAction } from '@shared/types'
 
@@ -17,7 +18,7 @@ import type { TrayController } from './tray'
 import { createUpdaterController } from './updater/controller'
 import type { UpdaterController } from './updater/controller'
 import { createMainWindow, getMainWindow } from './windows/mainWindow'
-import { createOverlayController } from './windows/overlayWindow'
+import { createOverlayWindow } from './windows/overlayWindow'
 import type { OverlayController } from './windows/overlayWindow'
 
 let store: SettingsStore | null = null
@@ -108,12 +109,18 @@ function bootstrap(): void {
   })
   controllerRef = controller
 
-  const overlayController = createOverlayController(
-    () => controller.getSnapshot().settings,
-    (position) => {
-      controller.updateSettings({ overlay: { customPosition: position } })
+  const overlayController = createOverlayWindow({
+    page: 'overlay.html',
+    getPlacement: () => controller.getSnapshot().settings.overlay,
+    getPresetSize: () => OVERLAY_SIZES[controller.getSnapshot().settings.overlay.size],
+    getLimits: () => OVERLAY_SIZE_LIMITS.count,
+    onMoved: (customPosition) => {
+      controller.updateSettings({ overlay: { customPosition } })
+    },
+    onResized: (customSize) => {
+      controller.updateSettings({ overlay: { customSize } })
     }
-  )
+  })
   overlay = overlayController
 
   const toggleOverlayVisibility = (): void => {

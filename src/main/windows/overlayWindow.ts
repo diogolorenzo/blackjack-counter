@@ -1,14 +1,29 @@
 import { BrowserWindow, screen } from 'electron'
 import type { Rectangle } from 'electron'
 import { join } from 'node:path'
-import { OVERLAY_SIZES } from '@shared/defaults'
-import type { Corner, OverlaySettings, Settings } from '@shared/types'
+import { clampOverlaySize, effectiveOverlaySize } from '@shared/domain/overlaySize'
+import type { Size, SizeLimits } from '@shared/domain/overlaySize'
+import type { Corner, OverlayPlacement } from '@shared/types'
+
+export interface OverlayWindowSpec {
+  /** Nome do arquivo em src/renderer, ex: 'overlay.html'. */
+  page: string
+  getPlacement: () => OverlayPlacement
+  /** Tamanho do preset em vigor, já resolvido por layout pelo chamador. */
+  getPresetSize: () => Size
+  getLimits: () => SizeLimits
+  onMoved: (pos: { x: number; y: number }) => void
+  onResized: (size: Size) => void
+}
 
 export interface OverlayController {
   ensure(): BrowserWindow
   setVisible(visible: boolean): void
   setLocked(locked: boolean): void
-  applyPlacement(overlay: OverlaySettings): void
+  /** Sem argumento: lê placement, preset e limites pelos getters do spec. */
+  applyPlacement(): void
+  /** Arrasto da alça. Clampa e escreve; a persistência vem do evento 'resized'. */
+  resizeTo(size: Size): void
   get(): BrowserWindow | null
   destroy(): void
 }
@@ -58,53 +73,84 @@ function cornerPosition(
   }
 }
 
-function loadOverlay(win: BrowserWindow): void {
+function loadPage(win: BrowserWindow, page: string): void {
   const devUrl = process.env.ELECTRON_RENDERER_URL
   if (devUrl !== undefined && devUrl !== '') {
-    void win.loadURL(`${devUrl.replace(/\/$/, '')}/overlay.html`)
+    void win.loadURL(`${devUrl.replace(/\/$/, '')}/${page}`)
     return
   }
-  void win.loadFile(join(__dirname, '../renderer/overlay.html'))
+  void win.loadFile(join(__dirname, `../renderer/${page}`))
 }
 
-export function createOverlayController(
-  getSettings: () => Settings,
-  onMoved: (pos: { x: number; y: number }) => void
-): OverlayController {
+export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController {
   let win: BrowserWindow | null = null
-  /** Última posição escrita por applyPlacement, para distinguir de um arrasto real. */
+  /** Últimos bounds escritos por nós, para distinguir eco de gesto do usuário. */
   let placedAt: Point | null = null
+  let placedSize: Size | null = null
 
   function alive(): BrowserWindow | null {
     if (win === null || win.isDestroyed()) return null
     return win
   }
 
-  function applyPlacement(overlay: OverlaySettings): void {
+  /**
+   * O Windows ignora setBounds enquanto a janela está com resizable false.
+   * Destravar só durante a escrita mantém a janela sem borda de arrasto nativa
+   * e ainda assim reposicionável e redimensionável por código.
+   */
+  function writeBounds(target: BrowserWindow, next: Rectangle): void {
+    const wasResizable = target.isResizable()
+    if (!wasResizable) target.setResizable(true)
+    target.setBounds(next)
+    if (!wasResizable) target.setResizable(false)
+  }
+
+  function resolveSize(area: Rectangle): Size {
+    return effectiveOverlaySize(
+      spec.getPresetSize(),
+      spec.getPlacement().customSize,
+      spec.getLimits(),
+      { width: area.width, height: area.height }
+    )
+  }
+
+  function applyPlacement(): void {
     const target = alive()
     if (target === null) return
 
-    const size = OVERLAY_SIZES[overlay.size]
-    const custom = overlay.customPosition
+    const placement = spec.getPlacement()
+    const custom = placement.customPosition
     const bounds = target.getBounds()
     const reference = custom ?? {
       x: Math.round(bounds.x + bounds.width / 2),
       y: Math.round(bounds.y + bounds.height / 2)
     }
     const area = screen.getDisplayNearestPoint(reference).workArea
+    const size = resolveSize(area)
     const desired =
-      custom ?? cornerPosition(overlay.corner, size.width, size.height, overlay.margin, area)
+      custom ?? cornerPosition(placement.corner, size.width, size.height, placement.margin, area)
     const pos = clampToArea(desired, size.width, size.height, area)
 
     placedAt = pos
+    placedSize = size
+    writeBounds(target, { x: pos.x, y: pos.y, width: size.width, height: size.height })
+  }
 
-    // No Windows, setBounds é ignorado enquanto a janela está com resizable
-    // false; destravar só durante a escrita evita que o overlay fique preso no
-    // tamanho inicial ao trocar de preset.
-    const wasResizable = target.isResizable()
-    if (!wasResizable) target.setResizable(true)
-    target.setBounds({ x: pos.x, y: pos.y, width: size.width, height: size.height })
-    if (!wasResizable) target.setResizable(false)
+  function resizeTo(size: Size): void {
+    const target = alive()
+    if (target === null) return
+
+    const bounds = target.getBounds()
+    const area = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y }).workArea
+    const next = clampOverlaySize(size, spec.getLimits(), {
+      width: area.width,
+      height: area.height
+    })
+
+    // Só o tamanho muda: a alça cresce a janela para a direita e para baixo, com
+    // o canto superior esquerdo parado, que é o que o gesto promete visualmente.
+    placedSize = next
+    writeBounds(target, { x: bounds.x, y: bounds.y, width: next.width, height: next.height })
   }
 
   function setLocked(locked: boolean): void {
@@ -121,8 +167,7 @@ export function createOverlayController(
     const existing = alive()
     if (existing !== null) return existing
 
-    const settings = getSettings()
-    const size = OVERLAY_SIZES[settings.overlay.size]
+    const size = spec.getPresetSize()
 
     const created = new BrowserWindow({
       width: size.width,
@@ -163,19 +208,31 @@ export function createOverlayController(
       // setBounds também emite 'moved': persistir esse eco converteria o modo
       // de canto em posição customizada sozinho, no primeiro reposicionamento.
       if (placedAt !== null && placedAt.x === x && placedAt.y === y) return
-      onMoved({ x, y })
+      spec.onMoved({ x, y })
+    })
+
+    // 'resized' e não 'resize': o segundo dispara a cada frame do gesto nativo.
+    // Aqui o gesto é nosso (vem de resizeTo), mas o evento final é o único que
+    // vale persistir, e o eco de setBounds precisa da mesma guarda de 'moved'.
+    created.on('resized', () => {
+      const current = alive()
+      if (current === null) return
+      const [width, height] = current.getSize()
+      if (placedSize !== null && placedSize.width === width && placedSize.height === height) return
+      spec.onResized({ width, height })
     })
 
     created.on('closed', () => {
       if (win === created) {
         win = null
         placedAt = null
+        placedSize = null
       }
     })
 
-    applyPlacement(settings.overlay)
-    setLocked(settings.overlay.locked)
-    loadOverlay(created)
+    applyPlacement()
+    setLocked(spec.getPlacement().locked)
+    loadPage(created, spec.page)
 
     return created
   }
@@ -187,7 +244,7 @@ export function createOverlayController(
     }
 
     const target = ensure()
-    applyPlacement(getSettings().overlay)
+    applyPlacement()
     // Reafirmar a cada exibição: o Windows rebaixa o nível quando outro app
     // entra em fullscreen e volta.
     target.setAlwaysOnTop(true, 'screen-saver')
@@ -203,10 +260,12 @@ export function createOverlayController(
     const target = alive()
     win = null
     placedAt = null
+    placedSize = null
     if (target === null) return
     target.removeAllListeners('moved')
+    target.removeAllListeners('resized')
     target.destroy()
   }
 
-  return { ensure, setVisible, setLocked, applyPlacement, get, destroy }
+  return { ensure, setVisible, setLocked, applyPlacement, resizeTo, get, destroy }
 }
