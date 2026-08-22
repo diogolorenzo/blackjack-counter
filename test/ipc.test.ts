@@ -168,10 +168,23 @@ function harness() {
     destroy: () => overlayCalls.push('destroy')
   }
   const win = { minimize: () => overlayCalls.push('minimize'), close: () => overlayCalls.push('close'), isDestroyed: () => false }
+  const strategyOverlay = {
+    ensure: () => {
+      overlayCalls.push('strategy:ensure')
+      return {} as never
+    },
+    setVisible: (v: boolean) => overlayCalls.push(`strategy:setVisible:${v}`),
+    setLocked: (v: boolean) => overlayCalls.push(`strategy:setLocked:${v}`),
+    applyPlacement: () => overlayCalls.push('strategy:applyPlacement'),
+    resizeTo: () => overlayCalls.push('strategy:resizeTo'),
+    get: () => null,
+    destroy: () => overlayCalls.push('strategy:destroy')
+  }
   registerIpcHandlers({
     controller,
     hotkeys,
     overlay,
+    strategyOverlay,
     getMainWindow: () => win as never
   })
   const call = (ch: string, ...args: unknown[]): unknown => {
@@ -385,5 +398,79 @@ describe('registerIpcHandlers', () => {
     const { call, controller } = harness()
     expect(() => call(IPC.sessionAcknowledgeRestore)).not.toThrow()
     expect(controller.getSnapshot().sessionRestored).toBe(false)
+  })
+})
+
+function fakeOverlay() {
+  const calls: string[] = []
+  return {
+    calls,
+    controller: {
+      ensure: () => {
+        calls.push('ensure')
+        return {} as never
+      },
+      setVisible: (v: boolean) => calls.push(`setVisible:${String(v)}`),
+      setLocked: (v: boolean) => calls.push(`setLocked:${String(v)}`),
+      applyPlacement: () => calls.push('applyPlacement'),
+      resizeTo: (s: { width: number; height: number }) =>
+        calls.push(`resizeTo:${s.width}x${s.height}`),
+      get: () => null,
+      destroy: () => calls.push('destroy')
+    }
+  }
+}
+
+describe('overlay de jogada pelo IPC', () => {
+  it('ligar o overlay de jogada não mexe no de contagem', async () => {
+    const count = fakeOverlay()
+    const strategy = fakeOverlay()
+    const controller = newController()
+    registerIpcHandlers({
+      controller,
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: count.controller,
+      strategyOverlay: strategy.controller,
+      getMainWindow: () => null
+    })
+
+    await registered.get(IPC.settingsUpdate)?.({ strategyOverlay: { visible: true } })
+
+    expect(strategy.calls).toContain('setVisible:true')
+    expect(count.calls).toEqual([])
+  })
+
+  it('resizeTo é roteado pelo kind', async () => {
+    const count = fakeOverlay()
+    const strategy = fakeOverlay()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: count.controller,
+      strategyOverlay: strategy.controller,
+      getMainWindow: () => null
+    })
+
+    await registered.get(IPC.overlayResizeTo)?.('strategy', { width: 300, height: 200 })
+
+    expect(strategy.calls).toEqual(['resizeTo:300x200'])
+    expect(count.calls).toEqual([])
+  })
+
+  it('kind desconhecido não faz nada, em vez de lançar', async () => {
+    const count = fakeOverlay()
+    const strategy = fakeOverlay()
+    registerIpcHandlers({
+      controller: newController(),
+      hotkeys: new HotkeyManager(() => {}),
+      overlay: count.controller,
+      strategyOverlay: strategy.controller,
+      getMainWindow: () => null
+    })
+
+    await registered.get(IPC.overlayResizeTo)?.('holograma', { width: 300, height: 200 })
+
+    expect(count.calls).toEqual([])
+    expect(strategy.calls).toEqual([])
   })
 })

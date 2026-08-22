@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 
-import { OVERLAY_SIZES, OVERLAY_SIZE_LIMITS } from '@shared/defaults'
+import { OVERLAY_SIZES, OVERLAY_SIZE_LIMITS, STRATEGY_OVERLAY_SIZES } from '@shared/defaults'
 import { IPC_EVENTS } from '@shared/ipc'
 import type { AppSnapshot, HotkeyAction } from '@shared/types'
 
@@ -26,11 +26,16 @@ let sessionStore: SessionStore | null = null
 let controllerRef: SessionController | null = null
 let hotkeys: HotkeyManager | null = null
 let overlay: OverlayController | null = null
+let strategyOverlay: OverlayController | null = null
 let tray: TrayController | null = null
 let updater: UpdaterController | null = null
 
 function liveWindows(): BrowserWindow[] {
-  const candidates = [getMainWindow(), overlay === null ? null : overlay.get()]
+  const candidates = [
+    getMainWindow(),
+    overlay === null ? null : overlay.get(),
+    strategyOverlay === null ? null : strategyOverlay.get()
+  ]
   return candidates.filter(
     (win): win is BrowserWindow => win !== null && !win.isDestroyed() && !win.webContents.isDestroyed()
   )
@@ -123,6 +128,26 @@ function bootstrap(): void {
   })
   overlay = overlayController
 
+  const strategyController = createOverlayWindow({
+    page: 'strategy.html',
+    getPlacement: () => controller.getSnapshot().settings.strategyOverlay,
+    getPresetSize: () => {
+      const { layout, size } = controller.getSnapshot().settings.strategyOverlay
+      return STRATEGY_OVERLAY_SIZES[layout][size]
+    },
+    getLimits: () =>
+      controller.getSnapshot().settings.strategyOverlay.layout === 'matrix'
+        ? OVERLAY_SIZE_LIMITS.strategyMatrix
+        : OVERLAY_SIZE_LIMITS.strategyGuide,
+    onMoved: (customPosition) => {
+      controller.updateSettings({ strategyOverlay: { customPosition } })
+    },
+    onResized: (customSize) => {
+      controller.updateSettings({ strategyOverlay: { customSize } })
+    }
+  })
+  strategyOverlay = strategyController
+
   const toggleOverlayVisibility = (): void => {
     applyOverlayVisibility(controller, !controller.getSnapshot().settings.overlay.visible)
   }
@@ -144,6 +169,7 @@ function bootstrap(): void {
     controller,
     hotkeys: hotkeyManager,
     overlay: overlayController,
+    strategyOverlay: strategyController,
     getMainWindow
   })
 
@@ -161,6 +187,7 @@ function bootstrap(): void {
   tray.update(controller.getSnapshot())
 
   if (settings.overlay.visible) overlayController.setVisible(true)
+  if (settings.strategyOverlay.visible) strategyController.setVisible(true)
 
   updater = createUpdaterController({ getMainWindow })
 }
@@ -181,8 +208,10 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {
     if (process.platform === 'darwin') return
     // Fechar a janela principal deixa o app vivo na bandeja; só sai de fato
-    // quando não sobrou nem tray nem overlay para operá-lo.
-    const overlayAlive = overlay !== null && overlay.get() !== null
+    // quando não sobrou nem tray nem overlay (de qualquer um dos dois) para operá-lo.
+    const overlayAlive =
+      (overlay !== null && overlay.get() !== null) ||
+      (strategyOverlay !== null && strategyOverlay.get() !== null)
     if (tray !== null || overlayAlive) return
     app.quit()
   })
@@ -204,6 +233,9 @@ if (!app.requestSingleInstanceLock()) {
 
     overlay?.destroy()
     overlay = null
+
+    strategyOverlay?.destroy()
+    strategyOverlay = null
 
     tray?.destroy()
     tray = null

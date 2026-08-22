@@ -86,9 +86,10 @@ export function registerIpcHandlers(deps: {
   controller: SessionController
   hotkeys: HotkeyManager
   overlay: OverlayController
+  strategyOverlay: OverlayController
   getMainWindow: () => BrowserWindow | null
 }): void {
-  const { controller, hotkeys, overlay, getMainWindow } = deps
+  const { controller, hotkeys, overlay, strategyOverlay, getMainWindow } = deps
 
   const handle = (channel: string, listener: (...args: unknown[]) => unknown): void => {
     // Registrar o mesmo canal duas vezes lança; remover antes torna a função idempotente.
@@ -144,6 +145,13 @@ export function registerIpcHandlers(deps: {
       after.overlay,
       before.overlay.size !== after.overlay.size || before.overlay.layout !== after.overlay.layout,
       overlay
+    )
+    syncOverlay(
+      before.strategyOverlay,
+      after.strategyOverlay,
+      before.strategyOverlay.size !== after.strategyOverlay.size ||
+        before.strategyOverlay.layout !== after.strategyOverlay.layout,
+      strategyOverlay
     )
     return controller.getSnapshot()
   }
@@ -275,11 +283,11 @@ export function registerIpcHandlers(deps: {
   handle(IPC.overlaySetSize, (size) =>
     isOverlaySize(size) ? applyPatch({ overlay: { size } }) : controller.getSnapshot()
   )
-  // Nesta task só existe o overlay de contagem; a Task 10 acrescenta o outro braço.
   handle(IPC.overlayResizeTo, (kind, size) => {
     const target = asSize(size)
     if (!isOverlayKind(kind) || target === null) return
     if (kind === 'count') overlay.resizeTo(target)
+    else strategyOverlay.resizeTo(target)
   })
 
   handle(IPC.historyGet, () => controller.getHistory())
