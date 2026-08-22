@@ -144,14 +144,23 @@ function Field({
 function Segmented<T extends string | number>({
   value,
   options,
-  onSelect
+  onSelect,
+  label
 }: {
   value: T
   options: readonly Option<T>[]
   onSelect: (next: T) => void
+  // Só necessário quando o mesmo rótulo de opção (P/M/G, por exemplo) aparece em
+  // mais de um Segmented na tela: sem isso o grupo não tem como ser distinguido
+  // por acessibilidade nem localizado nos testes.
+  label?: string
 }) {
   return (
-    <div className="flex overflow-hidden rounded-md border border-border">
+    <div
+      className="flex overflow-hidden rounded-md border border-border"
+      role={label !== undefined ? 'group' : undefined}
+      aria-label={label}
+    >
       {options.map((option) => (
         <button
           key={String(option.value)}
@@ -544,11 +553,17 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
       </Section>
 
       <Section title="Overlay">
-        <Field label="Tamanho">
+        <Field
+          label="Tamanho"
+          hint={overlay.customSize !== null ? 'Em tamanho ajustado' : undefined}
+        >
           <Segmented
             value={overlay.size}
             options={SIZE_OPTIONS}
-            onSelect={(size) => patchOverlay({ size })}
+            label="Tamanho do overlay"
+            // Limpar customSize junto: o tamanho arrastado tem prioridade, e o
+            // preset seria calculado e ignorado em seguida.
+            onSelect={(size) => patchOverlay({ size, customSize: null })}
           />
         </Field>
 
@@ -556,6 +571,7 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
           <Segmented
             value={overlay.layout}
             options={LAYOUT_OPTIONS}
+            label="Layout do overlay"
             onSelect={(layout) => patchOverlay({ layout })}
           />
         </Field>
@@ -599,7 +615,7 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
           </div>
         </Field>
 
-        <Field label="Travar (click-through)" hint="Destravado permite arrastar">
+        <Field label="Travar (click-through)" hint="Destravado permite arrastar e redimensionar">
           <Toggle
             checked={overlay.locked}
             label="Travar overlay"

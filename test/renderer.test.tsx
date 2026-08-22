@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../src/renderer/src/App'
@@ -352,6 +352,42 @@ describe('OverlayApp', () => {
     await waitFor(() => {
       const root = container.firstElementChild as HTMLElement | null
       expect(root?.style.getPropertyValue('--overlay-alpha')).toBe('0.4')
+    })
+  })
+})
+
+describe('tamanho arrastado nos ajustes', () => {
+  it('avisa quando o overlay está em tamanho ajustado', async () => {
+    stubApi(
+      snapshot({
+        overlay: { ...DEFAULT_SETTINGS.overlay, customSize: { width: 300, height: 200 } }
+      })
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    expect(await screen.findByText('Em tamanho ajustado')).toBeDefined()
+  })
+
+  /**
+   * O customizado tem prioridade sobre o preset. Escolher um preset sem limpar
+   * customSize calcularia o tamanho e o ignoraria em seguida — o botão pareceria
+   * quebrado.
+   */
+  it('escolher um preset limpa o tamanho arrastado', async () => {
+    const api = stubApi(
+      snapshot({
+        overlay: { ...DEFAULT_SETTINGS.overlay, customSize: { width: 300, height: 200 } }
+      })
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    // O rótulo "G" existe em mais de um Segmented (contagem e jogada); o grupo
+    // com aria-label restringe a busca ao seletor de tamanho do overlay de contagem.
+    const grupo = await screen.findByRole('group', { name: 'Tamanho do overlay' })
+    fireEvent.click(within(grupo).getByRole('button', { name: 'G' }))
+
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      overlay: { size: 'large', customSize: null }
     })
   })
 })
