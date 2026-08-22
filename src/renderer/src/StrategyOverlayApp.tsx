@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-import { DEFAULT_SETTINGS, STRATEGY_MATRIX_CANVAS } from '@shared/defaults'
+import { STRATEGY_MATRIX_CANVAS } from '@shared/defaults'
 
 import { ResizeGrip } from '@/components/ResizeGrip'
 import { StrategyGrid } from '@/components/StrategyGrid'
@@ -43,14 +43,28 @@ const CARD_BORDER = 2
 
 export function StrategyOverlayApp() {
   const { snapshot } = useCounterState()
-  const settings = snapshot?.settings ?? DEFAULT_SETTINGS
-  const derived = snapshot?.derived ?? null
-  const { locked, opacity, layout } = settings.strategyOverlay
   const windowSize = useWindowSize()
+  const palette = snapshot?.settings.palette
 
   useEffect(() => {
-    document.body.dataset.palette = settings.palette
-  }, [settings.palette])
+    if (palette === undefined) return
+    document.body.dataset.palette = palette
+  }, [palette])
+
+  /*
+    Nada é desenhado antes do primeiro snapshot.
+
+    Cair em DEFAULT_SETTINGS aqui significaria `system: 'hilo'`, e um jogador
+    de KO abrindo o guia veria um frame com desvios de Hi-Lo (16 vs 10 →
+    parar). É um frame só, mas seria o único lugar da base onde um índice de
+    Hi-Lo alcança um usuário de KO, e essa é a invariante central do projeto.
+    Janela vazia por um frame é melhor que conselho errado por um frame — ao
+    contrário do overlay de contagem, que pode mostrar zeros sem mentir.
+  */
+  if (snapshot === null) return null
+
+  const { settings, derived } = snapshot
+  const { locked, opacity, layout } = settings.strategyOverlay
 
   const availableWidth = Math.max(1, windowSize.width - CARD_BORDER)
   const availableHeight = Math.max(1, windowSize.height - CARD_BORDER)
@@ -88,7 +102,7 @@ export function StrategyOverlayApp() {
       <div className="p-2" style={{ width: designWidth, zoom: scale }}>
         {matrix ? (
           <StrategyGrid
-            decisionCount={derived?.decisionCount ?? 0}
+            decisionCount={derived.decisionCount}
             surrender={settings.shoe.surrender}
             countAware={settings.shoe.system === 'hilo'}
             compact
@@ -96,8 +110,8 @@ export function StrategyOverlayApp() {
         ) : (
           <StrategyGuide
             system={settings.shoe.system}
-            decisionCount={derived?.decisionCount ?? 0}
-            insuranceOn={derived?.insuranceOn ?? false}
+            decisionCount={derived.decisionCount}
+            insuranceOn={derived.insuranceOn}
             surrender={settings.shoe.surrender}
             maxRows={maxRows}
           />
