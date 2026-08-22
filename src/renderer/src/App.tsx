@@ -19,6 +19,7 @@ import { ShoeMeter } from '@/components/ShoeMeter'
 import { TabBar } from '@/components/TabBar'
 import type { Tab } from '@/components/TabBar'
 import { TitleBar } from '@/components/TitleBar'
+import { UpdateToast } from '@/components/UpdateToast'
 import { secondaryCount } from '@/countView'
 import { useCounterState } from '@/useCounterState'
 import { useFeedback } from '@/useFeedback'
@@ -178,7 +179,7 @@ export function App() {
   const boundActions = HOTKEY_ACTIONS.filter((action) => settings.bindings[action] !== '')
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       <TitleBar systemLabel={profile.label} />
       <TabBar
         active={tab}
@@ -386,6 +387,8 @@ export function App() {
           </div>
         </div>
       )}
+
+      <UpdateToast />
     </div>
   )
 }
