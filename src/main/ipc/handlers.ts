@@ -151,8 +151,7 @@ export function registerIpcHandlers(deps: {
     syncOverlay(
       before.strategyOverlay,
       after.strategyOverlay,
-      before.strategyOverlay.size !== after.strategyOverlay.size ||
-        before.strategyOverlay.layout !== after.strategyOverlay.layout,
+      before.strategyOverlay.size !== after.strategyOverlay.size,
       strategyOverlay
     )
     return controller.getSnapshot()

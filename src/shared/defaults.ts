@@ -5,8 +5,7 @@ import type {
   BindingProfile,
   HotkeyAction,
   OverlaySize,
-  Settings,
-  StrategyOverlayLayout
+  Settings
 } from './types'
 
 /**
@@ -170,107 +169,25 @@ export const OVERLAY_SIZES: Record<OverlaySize, { width: number; height: number 
 export const STRATEGY_OVERLAY_CARD_BORDER = 2
 
 /**
- * Canvas do modo guia, em px de canvas. MEDIDO em Chromium sobre o CSS
- * compilado, parcela por parcela:
+ * Tamanho intrínseco do overlay de jogada, em px de canvas — o que a janela
+ * escala por `zoom` até caber.
  *
- *   chrome = p-2 do wrapper (16) + cabeçalho (16,5) + seguro (23)
- *            + linha do "próximo" (13,75) + 3 x gap-1.5 (18)  =  87,25
- *   rowHeight = li (16,5) + gap-[3px] da lista (3)            =  19,5
- *
- * As duas parcelas de 16,5 vêm do line-height 1.5 que o preflight do Tailwind
- * põe no html sobre texto de 11px — nada aqui é chute, e nada aqui muda com a
- * escala de tela (ao contrário do canvas da matriz).
- *
- * Subestimar o chrome não aparece como texto cortado pela metade: o bloco
- * "próximo" é o último a desenhar, então é ele que some inteiro dentro do
- * overflow-hidden.
+ * Derivado dos tamanhos que os elementos do HandRound especificam (não medido
+ * em Chromium — reconferir contra o app rodando é o passo seguinte fora desta
+ * task). A PROPORÇÃO é o que importa aqui: os presets de STRATEGY_OVERLAY_SIZES
+ * dependem dela — um preset mais baixo que height/width corta o layout embaixo,
+ * e como o contêiner é overflow-hidden o corte não deixa nenhum sinal na tela.
  */
-export const STRATEGY_GUIDE_CANVAS = { width: 220, chrome: 87.25, rowHeight: 19.5 } as const
+export const STRATEGY_HAND_CANVAS: Size = { width: 240, height: 200 }
 
 /**
- * Tamanho intrínseco do chart completo (StrategyGrid em modo compact), em px de
- * canvas — o que o overlay de matriz escala por `zoom` até caber na janela.
- *
- * MEDIDO, não estimado: Chromium do Electron 43 no Windows, sobre o CSS
- * compilado deste projeto. A tabela empilha 31 linhas — 1 de cabeçalho (10px),
- * 3 de grupo (24,5px = pt-1.5 + linha de 16,5 + pb-0.5) e 27 de mão (16,5px,
- * mandadas pelo line-height 1.5 do th, não pelo h-4 do botão) — mais 32
- * espaçamentos de border-spacing 1px, o que dá 561px de tabela; com o p-2 do
- * wrapper fecha em 577.
- *
- * 577 é o PIOR caso, que é o que importa aqui: em escala de tela fracionária
- * (125%, 150%) o border-spacing encolhe por snapping de pixel de dispositivo e
- * a tabela mede alguns px a menos.
- *
- * Mora aqui, e não no renderer, porque é ele que dita a proporção de
- * STRATEGY_OVERLAY_SIZES.matrix: preset mais baixo que 577/268 da própria
- * largura corta o chart embaixo, e como o contêiner é overflow-hidden o corte
- * não deixa nenhum sinal na tela.
+ * Um só conjunto de presets: o overlay de jogada tem um layout só. Todos seguem
+ * a proporção de STRATEGY_HAND_CANVAS; `medium` é o canvas em tamanho natural.
  */
-export const STRATEGY_MATRIX_CANVAS: Size = { width: 268, height: 577 }
-
-/**
- * Tabela própria do overlay de jogada, indexada por layout: guia e matriz têm
- * proporções incomparáveis (uma lista de 6 linhas contra um chart de 27 linhas
- * por 10 colunas), então um único conjunto de presets serviria mal aos dois.
- *
- * Os presets de matriz seguem a proporção de STRATEGY_MATRIX_CANVAS (~2,15x
- * mais altos que largos), senão o chart é cortado em silêncio. `medium` é o
- * canvas em tamanho natural (escala 1,0, célula em 11px); small e large mantêm
- * o mesmo passo de escala (~0,83x e ~1,18x).
- *
- * As ALTURAS do guia são derivadas de STRATEGY_GUIDE_ROWS, não escolhidas: a
- * escala do guia sai só da largura, então a altura é o único eixo que muda a
- * capacidade. As larguras (200/240/290) são as de sempre.
- */
-export const STRATEGY_OVERLAY_SIZES: Record<StrategyOverlayLayout, Record<OverlaySize, Size>> = {
-  guide: {
-    small: { width: 200, height: 152 },
-    medium: { width: 240, height: 224 },
-    large: { width: 290, height: 347 }
-  },
-  matrix: {
-    small: { width: 224, height: 483 },
-    medium: { width: 268, height: 577 },
-    large: { width: 316, height: 681 }
-  }
-}
-
-/**
- * Quantas linhas de desvio cada preset de guia se propõe a mostrar.
- *
- * É a razão de ser dos três tamanhos: como a escala do guia sai só da largura
- * (o layout é uma coluna, não um chart de proporção fixa), presets de proporção
- * parecida entregam a MESMA capacidade e a escolha vira decoração. Foi o que
- * acontecia antes — 200x124, 240x156 e 290x190 davam 2 linhas os três.
- *
- * As alturas de STRATEGY_OVERLAY_SIZES.guide são derivadas destes números, não
- * o contrário.
- */
-export const STRATEGY_GUIDE_ROWS: Record<OverlaySize, number> = {
-  small: 4,
-  medium: 6,
-  large: 9
-}
-
-/**
- * Quantas linhas de desvio cabem numa janela de guia deste tamanho.
- *
- * Sai da altura REAL da janela e não do preset: com tamanho arrastável o preset
- * deixa de descrever a janela, e uma regra só serve aos três presets e a
- * qualquer tamanho parado pelo mouse. Mora no shared porque é a mesma conta que
- * o teste usa para provar que os presets entregam STRATEGY_GUIDE_ROWS — duas
- * cópias da fórmula divergiriam na primeira remedição.
- */
-export function strategyGuideRows(windowSize: Size): number {
-  const width = Math.max(1, windowSize.width - STRATEGY_OVERLAY_CARD_BORDER)
-  const height = Math.max(1, windowSize.height - STRATEGY_OVERLAY_CARD_BORDER)
-  const scale = width / STRATEGY_GUIDE_CANVAS.width
-  const canvasHeight = height / scale
-  return Math.max(
-    1,
-    Math.floor((canvasHeight - STRATEGY_GUIDE_CANVAS.chrome) / STRATEGY_GUIDE_CANVAS.rowHeight)
-  )
+export const STRATEGY_OVERLAY_SIZES: Record<OverlaySize, Size> = {
+  small: { width: 200, height: 167 },
+  medium: { width: 240, height: 200 },
+  large: { width: 290, height: 242 }
 }
 
 /**
@@ -284,13 +201,9 @@ export function strategyGuideRows(windowSize: Size): number {
  * num tamanho que corta o chart. O teto pode fugir da proporção à vontade — daí
  * só sobra margem em volta do chart, nunca corte.
  */
-export const OVERLAY_SIZE_LIMITS: Record<
-  'count' | 'strategyGuide' | 'strategyMatrix',
-  SizeLimits
-> = {
+export const OVERLAY_SIZE_LIMITS: Record<'count' | 'strategyHand', SizeLimits> = {
   count: { min: { width: 150, height: 92 }, max: { width: 560, height: 340 } },
-  strategyGuide: { min: { width: 170, height: 105 }, max: { width: 520, height: 420 } },
-  strategyMatrix: { min: { width: 210, height: 453 }, max: { width: 620, height: 840 } }
+  strategyHand: { min: { width: 170, height: 142 }, max: { width: 520, height: 433 } }
 }
 
 /**

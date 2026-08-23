@@ -4,10 +4,8 @@ import { clampOverlaySize, effectiveOverlaySize } from '../src/shared/domain/ove
 import {
   OVERLAY_SIZE_LIMITS,
   OVERLAY_SIZES,
-  STRATEGY_GUIDE_ROWS,
-  STRATEGY_MATRIX_CANVAS,
-  STRATEGY_OVERLAY_SIZES,
-  strategyGuideRows
+  STRATEGY_HAND_CANVAS,
+  STRATEGY_OVERLAY_SIZES
 } from '../src/shared/defaults'
 
 const limits = { min: { width: 100, height: 80 }, max: { width: 400, height: 300 } }
@@ -110,69 +108,30 @@ describe('tabelas de tamanho', () => {
   })
 
   /**
-   * Um preset fora dos limites seria redimensionado no primeiro applyPlacement
-   * e o seletor de tamanho passaria a mostrar um valor que a janela não tem.
+   * O overlay de jogada tem proporção fixa: preset fora dela corta o layout
+   * embaixo, e como o contêiner é overflow-hidden o corte não deixa sinal na
+   * tela.
    */
-  it('todo preset de jogada cabe nos limites do layout dele', () => {
-    const pairs = [
-      [STRATEGY_OVERLAY_SIZES.guide, OVERLAY_SIZE_LIMITS.strategyGuide],
-      [STRATEGY_OVERLAY_SIZES.matrix, OVERLAY_SIZE_LIMITS.strategyMatrix]
-    ] as const
-
-    for (const [table, { min, max }] of pairs) {
-      for (const size of Object.values(table)) {
-        expect(size.width).toBeGreaterThanOrEqual(min.width)
-        expect(size.height).toBeGreaterThanOrEqual(min.height)
-        expect(size.width).toBeLessThanOrEqual(max.width)
-        expect(size.height).toBeLessThanOrEqual(max.height)
-      }
+  it('os presets do overlay de jogada seguem a proporção do canvas', () => {
+    const ratio = STRATEGY_HAND_CANVAS.height / STRATEGY_HAND_CANVAS.width
+    for (const [name, size] of Object.entries(STRATEGY_OVERLAY_SIZES)) {
+      expect(size.height / size.width, `preset ${name}`).toBeCloseTo(ratio, 1)
     }
   })
 
-  /**
-   * O teste acima confere preset contra LIMITE; este confere preset contra
-   * CONTEÚDO, que é a relação que o jsdom nunca vai pegar — ele não faz layout
-   * e não aplica o Tailwind compilado.
-   *
-   * O overlay de matriz escala o chart por `min(largura/canvas, altura/canvas)`
-   * dentro de um contêiner overflow-hidden. Enquanto a janela for pelo menos
-   * tão esguia quanto o canvas, a escala é ditada pela largura e a altura sobra;
-   * uma janela mais achatada que isso corta o chart embaixo — sem barra de
-   * rolagem, sem "+N mais", sem nada. Foi assim que o bloco "Par" inteiro sumiu.
-   */
-  it('todo preset de matriz é alto o bastante para o chart inteiro caber', () => {
-    const { width: canvasWidth, height: canvasHeight } = STRATEGY_MATRIX_CANVAS
-    const sizes = [
-      ...Object.values(STRATEGY_OVERLAY_SIZES.matrix),
-      // O piso do arrasto vale a mesma regra: dá para parar o mouse nele.
-      OVERLAY_SIZE_LIMITS.strategyMatrix.min
-    ]
-
-    for (const size of sizes) {
-      expect(size.height).toBeGreaterThanOrEqual(canvasHeight * (size.width / canvasWidth))
-    }
+  it('o piso do overlay de jogada também segue a proporção', () => {
+    const ratio = STRATEGY_HAND_CANVAS.height / STRATEGY_HAND_CANVAS.width
+    const { min } = OVERLAY_SIZE_LIMITS.strategyHand
+    expect(min.height / min.width).toBeCloseTo(ratio, 1)
   })
 
-  /**
-   * O par do teste acima, para o guia — e o que impede a regressão que a
-   * revisão pegou: os três presets antigos tinham proporção quase idêntica
-   * (0,62 / 0,65 / 0,655) e, como a escala do guia sai só da largura, os três
-   * entregavam 2 linhas. O seletor de tamanho existia sem mudar nada do que
-   * importa.
-   *
-   * Um preset que caiba nos limites e desenhe a quantidade errada de linhas
-   * passa em todos os outros testes deste arquivo.
-   */
-  it('todo preset de guia entrega a quantidade de linhas que promete', () => {
-    for (const [size, box] of Object.entries(STRATEGY_OVERLAY_SIZES.guide)) {
-      const expected = STRATEGY_GUIDE_ROWS[size as keyof typeof STRATEGY_GUIDE_ROWS]
-      expect(strategyGuideRows(box), `preset ${size}`).toBe(expected)
+  it('os presets cabem entre o piso e o teto', () => {
+    const { min, max } = OVERLAY_SIZE_LIMITS.strategyHand
+    for (const size of Object.values(STRATEGY_OVERLAY_SIZES)) {
+      expect(size.width).toBeGreaterThanOrEqual(min.width)
+      expect(size.width).toBeLessThanOrEqual(max.width)
+      expect(size.height).toBeGreaterThanOrEqual(min.height)
+      expect(size.height).toBeLessThanOrEqual(max.height)
     }
-  })
-
-  /** E os três têm que ser DIFERENTES, senão o seletor de tamanho é decoração. */
-  it('os presets de guia entregam capacidades distintas', () => {
-    const rows = Object.values(STRATEGY_OVERLAY_SIZES.guide).map(strategyGuideRows)
-    expect(new Set(rows).size).toBe(rows.length)
   })
 })
