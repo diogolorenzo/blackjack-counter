@@ -86,6 +86,23 @@ describe('HandRound', () => {
     expect(screen.getByText(/Mão 1/)).toBeTruthy()
   })
 
+  /**
+   * A segunda mão de uma separação nasce com uma carta só. Encerrar a
+   * primeira não pode pular direto para o painel de decisão nela: sem
+   * segunda carta não há decisão, só o teclado.
+   */
+  it('a segunda mão de uma separação pede carta antes de decidir', () => {
+    render(<HandRound {...defaults} />)
+    pick('8')
+    pick('8')
+    pick('10')
+    fireEvent.click(screen.getByRole('button', { name: 'Separar' }))
+    pick('3')
+    fireEvent.click(screen.getByRole('button', { name: 'Ficar' }))
+    expect(screen.getByRole('button', { name: 'carta A' })).toBeTruthy()
+    expect(screen.queryByTestId('decision')).toBe(null)
+  })
+
   it('a tira não aparece com uma mão só', () => {
     render(<HandRound {...defaults} />)
     pick('10')

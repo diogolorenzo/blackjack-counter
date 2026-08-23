@@ -271,4 +271,12 @@ describe('desfazer e reiniciar', () => {
     const dealer = play(play(initialRound(true), card('9')), { type: 'reset' })
     expect(dealer).toEqual(initialRound(true))
   })
+
+  it('reiniciar com uma ordem nova recomeça nessa ordem', () => {
+    const state = play(opened('10', '6', '9'), { type: 'reset', dealerFirst: true })
+    expect(state).toEqual(initialRound(true))
+
+    const back = play(play(initialRound(true), card('9')), { type: 'reset', dealerFirst: false })
+    expect(back).toEqual(initialRound(false))
+  })
 })

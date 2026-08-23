@@ -61,7 +61,11 @@ export type RoundAction =
   | { type: 'double' }
   | { type: 'split' }
   | { type: 'undo' }
-  | { type: 'reset' }
+  /**
+   * `dealerFirst` é opcional: um reset comum (nova mão) mantém a ordem
+   * atual; só a troca de ajuste precisa informar a ordem nova.
+   */
+  | { type: 'reset'; dealerFirst?: boolean }
 
 export function initialRound(dealerFirst: boolean): RoundState {
   return {
@@ -94,7 +98,7 @@ export function roundReducer(state: RoundState, action: RoundAction): RoundState
     case 'undo':
       return undo(state)
     case 'reset':
-      return initialRound(state.dealerFirst)
+      return initialRound(action.dealerFirst ?? state.dealerFirst)
     default:
       return state
   }

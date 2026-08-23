@@ -61,7 +61,7 @@ export function HandRound({
   */
   useEffect(() => {
     if (round.dealerFirst !== dealerFirst) {
-      dispatch({ type: 'reset' })
+      dispatch({ type: 'reset', dealerFirst })
       setAwaitingCard(false)
     }
   }, [dealerFirst, round.dealerFirst])
@@ -78,8 +78,17 @@ export function HandRound({
   const countAware = system === 'hilo'
   const hand = round.hands[round.activeIndex]
 
+  /*
+    Uma mão recém-saída de uma separação chega com uma carta só e nenhuma
+    decisão a tomar ainda — ela sempre precisa de carta, independente do
+    último botão apertado. `awaitingCard` cobre os casos que o estado da
+    rodada não expressa (pedir, e a carta que fecha um dobrar); a contagem de
+    cartas cobre este.
+  */
+  const needsCard = awaitingCard || hand.cards.length < 2
+
   const decision =
-    round.step === 'playing' && round.upcard !== null && !awaitingCard
+    round.step === 'playing' && round.upcard !== null && !needsCard
       ? decideHand(hand, round.upcard, decisionCount, rules, countAware, round.hands.length)
       : null
 
