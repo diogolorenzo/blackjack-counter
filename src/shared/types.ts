@@ -112,6 +112,9 @@ export type OverlayLayout = 'full' | 'minimal'
 /** `colorblind` troca verde/vermelho por azul/laranja (deuteranopia/protanopia). */
 export type Palette = 'default' | 'colorblind'
 
+/** Tamanho das teclas de rank no overlay de jogada. */
+export type KeypadDensity = 'compact' | 'comfortable'
+
 /** Como a aba de desvios se apresenta. */
 export type DeviationsLayout = 'list' | 'matrix'
 
