@@ -85,6 +85,8 @@ export function roundReducer(state: RoundState, action: RoundAction): RoundState
   switch (action.type) {
     case 'addCard':
       return addCard(state, action.rank)
+    case 'stand':
+      return finishActive(state, 'stood')
     default:
       return state
   }
@@ -114,7 +116,25 @@ function addCard(state: RoundState, rank: Rank): RoundState {
     return commit(state, next.step === 'playing' ? openPlay(next) : next)
   }
 
-  return state
+  if (state.step !== 'playing') return state
+
+  const hand = state.hands[state.activeIndex]
+  const cards = [...hand.cards, rank]
+  const value = handValue(cards, hand.fromSplit)
+
+  const status: HandStatus = value.busted
+    ? 'busted'
+    : hand.doubling
+      ? 'doubled'
+      : hand.splitAces || value.total === 21
+        ? 'stood'
+        : 'active'
+
+  const hands = state.hands.map((item, index) =>
+    index === state.activeIndex ? { ...item, cards, status } : item
+  )
+
+  return commit(state, status === 'active' ? { ...state, hands } : advance({ ...state, hands }))
 }
 
 /**
@@ -128,5 +148,34 @@ function openPlay(state: Omit<RoundState, 'past'>): Omit<RoundState, 'past'> {
     ...state,
     hands: [{ ...hand, status: 'blackjack' }],
     step: 'done'
+  }
+}
+
+/** Encerra a mão ativa com este desfecho e passa para a próxima. */
+function finishActive(state: RoundState, status: HandStatus): RoundState {
+  if (state.step !== 'playing') return state
+  const hands = state.hands.map((item, index) =>
+    index === state.activeIndex ? { ...item, status } : item
+  )
+  return commit(state, advance({ ...state, hands }))
+}
+
+/**
+ * Ativa a próxima mão pendente. Sem nenhuma, a rodada acabou.
+ *
+ * A busca varre do começo e não a partir do índice ativo: com separação
+ * aninhada as mãos novas entram no meio da lista, e uma busca só para a frente
+ * pularia uma mão que nasceu antes da atual.
+ */
+function advance(state: Omit<RoundState, 'past'>): Omit<RoundState, 'past'> {
+  const next = state.hands.findIndex((hand) => hand.status === 'pending')
+  if (next === -1) return { ...state, step: 'done' }
+  return {
+    ...state,
+    hands: state.hands.map((hand, index) =>
+      index === next ? { ...hand, status: 'active' } : hand
+    ),
+    activeIndex: next,
+    step: 'playing'
   }
 }

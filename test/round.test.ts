@@ -14,6 +14,9 @@ const card = (rank: Rank): RoundAction => ({
   rank
 })
 
+const opened = (...cards: Parameters<typeof card>[0][]) =>
+  play(initialRound(false), ...cards.map(card))
+
 describe('abertura da rodada', () => {
   it('começa pedindo a mão do jogador', () => {
     const state = initialRound(false)
@@ -56,11 +59,57 @@ describe('abertura da rodada', () => {
   })
 
   /**
+   * Com dealerFirst o blackjack natural também deve ser detectado no fluxo do
+   * dealer. Esta é a única guarda para o ramo hand-fixed na transição dealer.
+   */
+  it('blackjack natural encerra a rodada na abertura com dealerFirst', () => {
+    const state = play(initialRound(true), card('9'), card('A'), card('10'))
+    expect(state.hands[0].status).toBe('blackjack')
+    expect(state.step).toBe('done')
+  })
+
+  /**
    * Rank e Upcard têm que descrever o mesmo conjunto de cartas: o reducer
    * converte um no outro ao gravar o upcard. Se um dia divergirem, isto quebra
    * aqui e não numa consulta silenciosa que devolve null.
    */
   it('Rank e Upcard descrevem o mesmo conjunto', () => {
     expect([...RANKS].sort()).toEqual([...UPCARDS].sort())
+  })
+})
+
+describe('jogando a mão', () => {
+  it('pedir acrescenta carta e a mão continua', () => {
+    const state = play(opened('10', '6', '9'), card('2'))
+    expect(state.hands[0].cards).toEqual(['10', '6', '2'])
+    expect(state.hands[0].status).toBe('active')
+    expect(state.step).toBe('playing')
+  })
+
+  it('estourar encerra a mão e a rodada', () => {
+    const state = play(opened('10', '6', '9'), card('10'))
+    expect(state.hands[0].status).toBe('busted')
+    expect(state.step).toBe('done')
+  })
+
+  it('ficar encerra a mão e a rodada', () => {
+    const state = play(opened('10', '6', '9'), { type: 'stand' })
+    expect(state.hands[0].status).toBe('stood')
+    expect(state.step).toBe('done')
+  })
+
+  /**
+   * 21 não tem jogada: pedir estoura e dobrar não existe. Encerrar sozinho tira
+   * um clique de cada mão que chega lá, e nunca pode estar errado.
+   */
+  it('chegar a 21 encerra a mão sozinho', () => {
+    const state = play(opened('10', '6', '9'), card('5'))
+    expect(state.hands[0].status).toBe('stood')
+    expect(state.step).toBe('done')
+  })
+
+  it('mão encerrada não aceita mais cartas', () => {
+    const done = play(opened('10', '6', '9'), { type: 'stand' })
+    expect(play(done, card('2'))).toEqual(done)
   })
 })
