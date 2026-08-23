@@ -87,9 +87,27 @@ export function roundReducer(state: RoundState, action: RoundAction): RoundState
       return addCard(state, action.rank)
     case 'stand':
       return finishActive(state, 'stood')
+    case 'double':
+      return startDouble(state)
     default:
       return state
   }
+}
+
+/**
+ * Marca a mão ativa como dobrando. Ela continua ativa porque ainda falta a
+ * carta; quem encerra é o `addCard` seguinte.
+ */
+function startDouble(state: RoundState): RoundState {
+  if (state.step !== 'playing') return state
+  const hand = state.hands[state.activeIndex]
+  if (hand.cards.length !== 2 || hand.doubling) return state
+  return commit(state, {
+    ...state,
+    hands: state.hands.map((item, index) =>
+      index === state.activeIndex ? { ...item, doubling: true } : item
+    )
+  })
 }
 
 function addCard(state: RoundState, rank: Rank): RoundState {

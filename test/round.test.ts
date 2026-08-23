@@ -113,3 +113,31 @@ describe('jogando a mão', () => {
     expect(play(done, card('2'))).toEqual(done)
   })
 })
+
+describe('dobrar', () => {
+  /**
+   * Dobrar não encerra na hora: a mão recebe exatamente uma carta e só então
+   * fecha. Encerrar no clique deixaria a carta da dobra fora da mão mostrada.
+   */
+  it('a carta seguinte encerra a mão como dobrada', () => {
+    const doubled = play(opened('5', '6', '9'), { type: 'double' })
+    expect(doubled.hands[0].status).toBe('active')
+    expect(doubled.hands[0].doubling).toBe(true)
+
+    const state = play(doubled, card('9'))
+    expect(state.hands[0].status).toBe('doubled')
+    expect(state.hands[0].cards).toEqual(['5', '6', '9'])
+    expect(state.step).toBe('done')
+  })
+
+  it('dobrar e estourar continua sendo estouro', () => {
+    const state = play(opened('9', '6', '9'), { type: 'double' }, card('10'))
+    expect(state.hands[0].status).toBe('busted')
+  })
+
+  /** Dobrar só nas duas primeiras cartas: depois de pedir, o clique não faz nada. */
+  it('não dobra depois de já ter pedido', () => {
+    const hit = play(opened('5', '4', '9'), card('2'))
+    expect(play(hit, { type: 'double' })).toEqual(hit)
+  })
+})
