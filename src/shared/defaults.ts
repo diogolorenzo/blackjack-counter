@@ -196,10 +196,11 @@ export const STRATEGY_OVERLAY_SIZES: Record<OverlaySize, Size> = {
  * O piso não é estético: sem ele dá para encolher a janela até a própria alça
  * sumir, e aí o overlay fica num tamanho do qual não se sai mais pelo mouse.
  *
- * No piso da matriz a altura acompanha a proporção de STRATEGY_MATRIX_CANVAS
- * pelo mesmo motivo dos presets: um piso mais baixo permitiria parar o arrasto
- * num tamanho que corta o chart. O teto pode fugir da proporção à vontade — daí
- * só sobra margem em volta do chart, nunca corte.
+ * No piso do overlay de jogada a altura acompanha a proporção de
+ * STRATEGY_HAND_CANVAS pelo mesmo motivo dos presets: um piso mais baixo
+ * permitiria parar o arrasto num tamanho que corta o layout. O teto pode fugir
+ * da proporção à vontade — daí só sobra margem em volta do conteúdo, nunca
+ * corte.
  */
 export const OVERLAY_SIZE_LIMITS: Record<'count' | 'strategyHand', SizeLimits> = {
   count: { min: { width: 150, height: 92 }, max: { width: 560, height: 340 } },

@@ -1,15 +1,9 @@
 import { useEffect } from 'react'
 
-import {
-  STRATEGY_GUIDE_CANVAS,
-  STRATEGY_MATRIX_CANVAS,
-  STRATEGY_OVERLAY_CARD_BORDER,
-  strategyGuideRows
-} from '@shared/defaults'
+import { STRATEGY_HAND_CANVAS, STRATEGY_OVERLAY_CARD_BORDER } from '@shared/defaults'
 
+import { HandRound } from '@/components/HandRound'
 import { ResizeGrip } from '@/components/ResizeGrip'
-import { StrategyGrid } from '@/components/StrategyGrid'
-import { StrategyGuide } from '@/components/StrategyGuide'
 import { useCounterState } from '@/useCounterState'
 import { useWindowSize } from '@/useWindowSize'
 
@@ -36,21 +30,18 @@ export function StrategyOverlayApp() {
   if (snapshot === null) return null
 
   const { settings, derived } = snapshot
-  const { locked, opacity, layout } = settings.strategyOverlay
+  const { locked, opacity } = settings.strategyOverlay
 
   // A borda de 1px do cartão fica fora do elemento com zoom, então o espaço de
   // desenho é a janela menos 2px em cada eixo.
   const availableWidth = Math.max(1, windowSize.width - STRATEGY_OVERLAY_CARD_BORDER)
   const availableHeight = Math.max(1, windowSize.height - STRATEGY_OVERLAY_CARD_BORDER)
 
-  const matrix = layout === 'matrix'
-  const designWidth = matrix ? STRATEGY_MATRIX_CANVAS.width : STRATEGY_GUIDE_CANVAS.width
-  const scale = matrix
-    ? Math.min(
-        availableWidth / STRATEGY_MATRIX_CANVAS.width,
-        availableHeight / STRATEGY_MATRIX_CANVAS.height
-      )
-    : availableWidth / STRATEGY_GUIDE_CANVAS.width
+  // Layout de proporção fixa: escala pela menor dimensão, senão corta.
+  const scale = Math.min(
+    availableWidth / STRATEGY_HAND_CANVAS.width,
+    availableHeight / STRATEGY_HAND_CANVAS.height
+  )
 
   return (
     <div
@@ -66,23 +57,17 @@ export function StrategyOverlayApp() {
         />
       )}
 
-      <div className="p-2" style={{ width: designWidth, zoom: scale }}>
-        {matrix ? (
-          <StrategyGrid
-            decisionCount={derived.decisionCount}
-            surrender={settings.shoe.surrender}
-            countAware={settings.shoe.system === 'hilo'}
-            compact
-          />
-        ) : (
-          <StrategyGuide
-            system={settings.shoe.system}
-            decisionCount={derived.decisionCount}
-            insuranceOn={derived.insuranceOn}
-            surrender={settings.shoe.surrender}
-            maxRows={strategyGuideRows(windowSize)}
-          />
-        )}
+      <div className="p-2" style={{ width: STRATEGY_HAND_CANVAS.width, zoom: scale }}>
+        <HandRound
+          system={settings.shoe.system}
+          decisionCount={derived.decisionCount}
+          surrender={settings.shoe.surrender}
+          insuranceOn={derived.insuranceOn}
+          dealerFirst={settings.strategyOverlay.dealerFirst}
+          showReason={settings.strategyOverlay.showReason}
+          autoResetSeconds={settings.strategyOverlay.autoResetSeconds}
+          keypadDensity={settings.strategyOverlay.keypadDensity}
+        />
       </div>
 
       {!locked && <ResizeGrip kind="strategy" />}
