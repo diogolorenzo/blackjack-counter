@@ -91,9 +91,24 @@ export function roundReducer(state: RoundState, action: RoundAction): RoundState
       return startDouble(state)
     case 'split':
       return split(state)
+    case 'undo':
+      return undo(state)
+    case 'reset':
+      return initialRound(state.dealerFirst)
     default:
       return state
   }
+}
+
+/**
+ * Volta um passo. A entrada do topo foi guardada com `past` vazio, então o
+ * histórico restante é recolocado aqui — é isso que faz desfazer funcionar
+ * várias vezes seguidas sem a pilha crescer em O(n²).
+ */
+function undo(state: RoundState): RoundState {
+  const previous = state.past[state.past.length - 1]
+  if (previous === undefined) return state
+  return { ...previous, past: state.past.slice(0, -1) }
 }
 
 /**

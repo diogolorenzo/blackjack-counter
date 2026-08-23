@@ -219,3 +219,48 @@ describe('separar', () => {
     expect(play(state, { type: 'split' })).toEqual(state)
   })
 })
+
+describe('desfazer e reiniciar', () => {
+  it('desfaz a última carta', () => {
+    const before = play(initialRound(false), card('10'))
+    const state = play(before, card('6'), { type: 'undo' })
+    expect(state.hands[0].cards).toEqual(['10'])
+    expect(state.step).toBe('player')
+  })
+
+  /**
+   * Desfazer tem que atravessar mais de um passo: erro de clique acontece em
+   * série, e uma pilha de um nível só obrigaria a resetar a rodada.
+   */
+  it('desfaz várias vezes seguidas', () => {
+    const state = play(
+      initialRound(false),
+      card('10'),
+      card('6'),
+      card('9'),
+      { type: 'undo' },
+      { type: 'undo' }
+    )
+    expect(state.hands[0].cards).toEqual(['10'])
+    expect(state.upcard).toBe(null)
+  })
+
+  it('desfaz uma separação inteira', () => {
+    const state = play(opened('8', '8', '9'), { type: 'split' }, { type: 'undo' })
+    expect(state.hands).toHaveLength(1)
+    expect(state.hands[0].cards).toEqual(['8', '8'])
+  })
+
+  it('desfazer no começo não faz nada', () => {
+    const start = initialRound(false)
+    expect(play(start, { type: 'undo' })).toEqual(start)
+  })
+
+  it('reiniciar volta ao começo preservando a ordem escolhida', () => {
+    const state = play(opened('10', '6', '9'), { type: 'reset' })
+    expect(state).toEqual(initialRound(false))
+
+    const dealer = play(play(initialRound(true), card('9')), { type: 'reset' })
+    expect(dealer).toEqual(initialRound(true))
+  })
+})
