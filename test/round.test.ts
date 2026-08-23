@@ -187,10 +187,18 @@ describe('separar', () => {
     expect(state.hands).toHaveLength(3)
   })
 
+  /**
+   * O laço é limitado por um número fixo de iterações, não por uma condição
+   * que depende do próprio `split` funcionar: se `split` regredir a um no-op,
+   * um `while` girando nessa condição travaria o teste (e o CI) em vez de
+   * falhar rápido com uma asserção legível.
+   */
   it('para de separar no limite de mãos', () => {
     let state = play(opened('8', '8', '9'), { type: 'split' })
-    while (state.hands.length < MAX_HANDS) {
-      state = play(state, card('8'), { type: 'split' })
+    for (let i = state.hands.length; i < MAX_HANDS; i++) {
+      const next = play(state, card('8'), { type: 'split' })
+      expect(next.hands).toHaveLength(state.hands.length + 1)
+      state = next
     }
     expect(state.hands).toHaveLength(MAX_HANDS)
     const blocked = play(state, card('8'), { type: 'split' })
