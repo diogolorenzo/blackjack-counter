@@ -17,7 +17,6 @@ import type {
   OverlaySize,
   Palette,
   Settings,
-  StrategyOverlayLayout,
   TrueCountRounding
 } from '@shared/types'
 
@@ -59,11 +58,6 @@ const SIZE_OPTIONS: readonly Option<OverlaySize>[] = [
 const LAYOUT_OPTIONS: readonly Option<OverlayLayout>[] = [
   { value: 'full', label: 'Completo' },
   { value: 'minimal', label: 'Mínimo' }
-]
-
-const STRATEGY_LAYOUT_OPTIONS: readonly Option<StrategyOverlayLayout>[] = [
-  { value: 'guide', label: 'Guia' },
-  { value: 'matrix', label: 'Matriz' }
 ]
 
 const PALETTE_OPTIONS: readonly Option<Palette>[] = [
@@ -655,14 +649,58 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
           />
         </Field>
 
-        <Field label="Modo" hint="Guia mostra só o que a contagem mudou">
+        <Field label="Ordem" hint="Qual carta o overlay pede primeiro">
           <Segmented
-            value={strategyOverlay.layout}
-            options={STRATEGY_LAYOUT_OPTIONS}
-            label="Modo do overlay de jogada"
-            // Os dois layouts têm tabelas de preset diferentes: um tamanho
-            // arrastado no guia não descreve nada na matriz.
-            onSelect={(layout) => patchStrategyOverlay({ layout, customSize: null })}
+            value={strategyOverlay.dealerFirst ? 'dealer' : 'player'}
+            options={[
+              { value: 'player', label: 'Minha mão' },
+              { value: 'dealer', label: 'Dealer' }
+            ]}
+            label="Ordem do fluxo de jogada"
+            onSelect={(value) => patchStrategyOverlay({ dealerFirst: value === 'dealer' })}
+          />
+        </Field>
+
+        <Field label="Explicação" hint="Índice e distância sob a jogada">
+          <Toggle
+            checked={strategyOverlay.showReason}
+            label="Mostrar o porquê da jogada"
+            onChange={(showReason) => patchStrategyOverlay({ showReason })}
+          />
+        </Field>
+
+        <Field label="Teclado" hint="Tamanho das teclas de carta">
+          <Segmented
+            value={strategyOverlay.keypadDensity}
+            options={[
+              { value: 'compact', label: 'Compacto' },
+              { value: 'comfortable', label: 'Confortável' }
+            ]}
+            label="Densidade do teclado de cartas"
+            onSelect={(keypadDensity) => patchStrategyOverlay({ keypadDensity })}
+          />
+        </Field>
+
+        <Field
+          label="Limpar sozinho"
+          hint={
+            strategyOverlay.autoResetSeconds === 0
+              ? 'Só no botão'
+              : `${strategyOverlay.autoResetSeconds}s após encerrar`
+          }
+          stacked
+        >
+          <input
+            type="range"
+            min={0}
+            max={30}
+            step={1}
+            value={strategyOverlay.autoResetSeconds}
+            aria-label="Segundos até limpar a rodada"
+            onChange={(event) =>
+              patchStrategyOverlay({ autoResetSeconds: Number(event.target.value) })
+            }
+            className="w-full accent-fg"
           />
         </Field>
 

@@ -297,24 +297,47 @@ describe('sanitização do overlay de jogada', () => {
     expect(new SettingsStore(p).get().strategyOverlay).toEqual(DEFAULT_SETTINGS.strategyOverlay)
   })
 
-  it('layout inválido cai no default', () => {
-    const p = tmpFile()
-    writeFileSync(p, JSON.stringify({ strategyOverlay: { layout: 'holograma' } }))
-    expect(new SettingsStore(p).get().strategyOverlay.layout).toBe('guide')
-  })
-
   it('opacidade fora de faixa é clampada', () => {
     const p = tmpFile()
     writeFileSync(p, JSON.stringify({ strategyOverlay: { opacity: 9 } }))
     expect(new SettingsStore(p).get().strategyOverlay.opacity).toBe(1)
   })
 
-  it('layout válido sobrevive', () => {
+  /**
+   * O settings.json de quem já usa o app tem `layout` gravado. Ignorar o campo
+   * não pode invalidar o arquivo inteiro: perder posição, tamanho e opacidade
+   * numa atualização é pior do que qualquer coisa que o campo obsoleto cause.
+   */
+  it('ignora o layout obsoleto sem descartar o resto do overlay de jogada', () => {
     const p = tmpFile()
-    writeFileSync(p, JSON.stringify({ strategyOverlay: { layout: 'matrix', visible: true } }))
+    writeFileSync(
+      p,
+      JSON.stringify({ strategyOverlay: { layout: 'matrix', opacity: 0.5, corner: 'top-left' } })
+    )
     const saved = new SettingsStore(p).get().strategyOverlay
-    expect(saved.layout).toBe('matrix')
-    expect(saved.visible).toBe(true)
+    expect('layout' in saved).toBe(false)
+    expect(saved.opacity).toBe(0.5)
+    expect(saved.corner).toBe('top-left')
+  })
+
+  it('valida os ajustes novos do overlay de jogada', () => {
+    const p = tmpFile()
+    writeFileSync(
+      p,
+      JSON.stringify({
+        strategyOverlay: {
+          dealerFirst: 'sim',
+          showReason: false,
+          autoResetSeconds: 999,
+          keypadDensity: 'gigante'
+        }
+      })
+    )
+    const saved = new SettingsStore(p).get().strategyOverlay
+    expect(saved.dealerFirst).toBe(false)
+    expect(saved.showReason).toBe(false)
+    expect(saved.autoResetSeconds).toBe(30)
+    expect(saved.keypadDensity).toBe('comfortable')
   })
 })
 
@@ -341,14 +364,11 @@ describe('sanitização de customSize', () => {
     expect(new SettingsStore(p).get().overlay.customSize).toEqual(OVERLAY_SIZE_LIMITS.count.max)
   })
 
-  it('o clamp do overlay de jogada segue o layout salvo', () => {
+  it('tamanho absurdo do overlay de jogada é clampado para o piso', () => {
     const p = tmpFile()
-    writeFileSync(
-      p,
-      JSON.stringify({ strategyOverlay: { layout: 'matrix', customSize: { width: 1, height: 1 } } })
-    )
+    writeFileSync(p, JSON.stringify({ strategyOverlay: { customSize: { width: 1, height: 1 } } }))
     expect(new SettingsStore(p).get().strategyOverlay.customSize).toEqual(
-      OVERLAY_SIZE_LIMITS.strategyMatrix.min
+      OVERLAY_SIZE_LIMITS.strategyHand.min
     )
   })
 

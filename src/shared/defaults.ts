@@ -273,7 +273,10 @@ export const DEFAULT_SETTINGS: Settings = {
     customPosition: null,
     customSize: null,
     size: 'medium',
-    layout: 'guide'
+    dealerFirst: false,
+    showReason: true,
+    autoResetSeconds: 0,
+    keypadDensity: 'comfortable'
   }
 }
 

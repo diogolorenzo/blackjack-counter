@@ -14,7 +14,7 @@ import { validateBetSpread } from '@shared/domain/betSpread'
 import { clampOverlaySize } from '@shared/domain/overlaySize'
 import type { SizeLimits } from '@shared/domain/overlaySize'
 import type { DeepPartial } from '@shared/ipc'
-import { HOTKEY_ACTIONS, isOptionalHotkeyAction } from '@shared/types'
+import { AUTO_RESET_RANGE, HOTKEY_ACTIONS, isOptionalHotkeyAction, KEYPAD_DENSITIES } from '@shared/types'
 import type {
   BankrollSettings,
   BetSpreadRule,
@@ -33,7 +33,6 @@ import type {
   Palette,
   Settings,
   ShoeConfig,
-  StrategyOverlayLayout,
   StrategyOverlaySettings,
   TrueCountRounding
 } from '@shared/types'
@@ -41,7 +40,6 @@ import type {
 const CORNERS: readonly Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
 const OVERLAY_SIZE_VALUES: readonly OverlaySize[] = ['small', 'medium', 'large']
 const OVERLAY_LAYOUTS: readonly OverlayLayout[] = ['full', 'minimal']
-const STRATEGY_OVERLAY_LAYOUTS: readonly StrategyOverlayLayout[] = ['guide', 'matrix']
 const ROUNDING_MODES: readonly TrueCountRounding[] = ['floor', 'nearest']
 const SYSTEMS: readonly CountingSystem[] = ['hilo', 'ko']
 const PALETTES: readonly Palette[] = ['default', 'colorblind']
@@ -251,15 +249,20 @@ function sanitizeOverlay(value: unknown): OverlaySettings {
 function sanitizeStrategyOverlay(value: unknown): StrategyOverlaySettings {
   const raw = isPlainObject(value) ? value : {}
   const fallback = DEFAULT_SETTINGS.strategyOverlay
-  // O limite depende do layout: a matriz tem piso muito maior que o guia, e
-  // usar o limite errado gravaria um tamanho que o outro modo não aceita.
-  const layout = pickEnum(raw.layout, STRATEGY_OVERLAY_LAYOUTS, fallback.layout)
-  const limits =
-    layout === 'matrix' ? OVERLAY_SIZE_LIMITS.strategyMatrix : OVERLAY_SIZE_LIMITS.strategyGuide
+  // `raw.layout` pode existir em arquivos de versões anteriores; é ignorado de
+  // propósito, sem invalidar o resto do objeto.
   return {
-    ...sanitizePlacement(raw, fallback, limits),
+    ...sanitizePlacement(raw, fallback, OVERLAY_SIZE_LIMITS.strategyHand),
     size: pickEnum(raw.size, OVERLAY_SIZE_VALUES, fallback.size),
-    layout
+    dealerFirst: pickBoolean(raw.dealerFirst, fallback.dealerFirst),
+    showReason: pickBoolean(raw.showReason, fallback.showReason),
+    autoResetSeconds: pickInteger(
+      raw.autoResetSeconds,
+      AUTO_RESET_RANGE.min,
+      AUTO_RESET_RANGE.max,
+      fallback.autoResetSeconds
+    ),
+    keypadDensity: pickEnum(raw.keypadDensity, KEYPAD_DENSITIES, fallback.keypadDensity)
   }
 }
 
