@@ -55,3 +55,41 @@ export function handValue(cards: readonly Rank[], fromSplit = false): HandValue 
     blackjack: !fromSplit && cards.length === 2 && total === 21
   }
 }
+
+/**
+ * Onde a mão é consultada: uma linha da tabela, ou uma resposta direta para as
+ * mãos que a tabela não cobre.
+ */
+export type RowLookup =
+  | { kind: 'row'; key: string }
+  | { kind: 'always'; action: 'hit' | 'stand' }
+
+/**
+ * Chave de linha de `HAND_ROWS` para esta mão.
+ *
+ * As faixas fora da tabela não são omissão dela: abaixo de 8 duro pedir é
+ * sempre certo, de 18 duro e 20 mole para cima ficar é sempre certo, e mole de
+ * 12 só existe como A,A que não pôde ser separado. Responder direto é mais
+ * barato e mais correto que inventar linhas.
+ *
+ * `canSplit` false força a leitura pela mão dura/mole equivalente: um 8,8 no
+ * limite de mãos é `hard-16`, não `pair-8`.
+ *
+ * Pré-condição: mão não estourada. Quem chama (`decideHand`) trata o estouro
+ * antes, porque mão estourada não tem jogada, e não uma jogada padrão.
+ */
+export function handRowKey(value: HandValue, canSplit: boolean): RowLookup {
+  if (canSplit && value.isPair && value.pairRank !== null) {
+    return { kind: 'row', key: `pair-${value.pairRank}` }
+  }
+
+  if (value.soft) {
+    if (value.total >= 20) return { kind: 'always', action: 'stand' }
+    if (value.total <= 12) return { kind: 'always', action: 'hit' }
+    return { kind: 'row', key: `soft-${value.total}` }
+  }
+
+  if (value.total <= 7) return { kind: 'always', action: 'hit' }
+  if (value.total >= 18) return { kind: 'always', action: 'stand' }
+  return { kind: 'row', key: `hard-${value.total}` }
+}
