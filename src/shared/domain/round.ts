@@ -89,6 +89,8 @@ export function roundReducer(state: RoundState, action: RoundAction): RoundState
       return finishActive(state, 'stood')
     case 'double':
       return startDouble(state)
+    case 'split':
+      return split(state)
     default:
       return state
   }
@@ -167,6 +169,46 @@ function openPlay(state: Omit<RoundState, 'past'>): Omit<RoundState, 'past'> {
     hands: [{ ...hand, status: 'blackjack' }],
     step: 'done'
   }
+}
+
+/**
+ * Separa a mão ativa em duas, uma carta em cada, e joga a primeira.
+ *
+ * As mãos novas entram no lugar da original em vez de irem para o fim da lista:
+ * a ordem da tira na tela é a ordem em que as mãos são jogadas na mesa, e
+ * empilhar no fim inverteria isso numa re-separação.
+ *
+ * `splitAces` é herdado por ambas: um ás separado recebe uma carta e encerra,
+ * então re-separar ases nunca chega a ser oferecido.
+ */
+function split(state: RoundState): RoundState {
+  if (state.step !== 'playing') return state
+  if (state.hands.length >= MAX_HANDS) return state
+
+  const hand = state.hands[state.activeIndex]
+  const [first, second] = hand.cards
+  if (hand.cards.length !== 2 || first !== second) return state
+
+  const splitAces = hand.splitAces || first === 'A'
+  const base = { fromSplit: true, splitAces, doubling: false }
+  const left: PlayerHand = { ...hand, ...base, id: `${hand.id}a`, cards: [first], status: 'active' }
+  const right: PlayerHand = {
+    ...hand,
+    ...base,
+    id: `${hand.id}b`,
+    cards: [second],
+    status: 'pending'
+  }
+
+  return commit(state, {
+    ...state,
+    hands: [
+      ...state.hands.slice(0, state.activeIndex),
+      left,
+      right,
+      ...state.hands.slice(state.activeIndex + 1)
+    ]
+  })
 }
 
 /** Encerra a mão ativa com este desfecho e passa para a próxima. */

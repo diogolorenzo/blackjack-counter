@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { UPCARDS } from '../src/shared/domain/basicStrategy'
 import type { Rank } from '../src/shared/domain/hand'
 import { RANKS } from '../src/shared/domain/hand'
-import { initialRound, roundReducer } from '../src/shared/domain/round'
+import { MAX_HANDS, initialRound, roundReducer } from '../src/shared/domain/round'
 import type { RoundAction, RoundState } from '../src/shared/domain/round'
 
 const play = (state: RoundState, ...actions: RoundAction[]): RoundState =>
@@ -139,5 +139,83 @@ describe('dobrar', () => {
   it('não dobra depois de já ter pedido', () => {
     const hit = play(opened('5', '4', '9'), card('2'))
     expect(play(hit, { type: 'double' })).toEqual(hit)
+  })
+})
+
+describe('separar', () => {
+  it('vira duas mãos com uma carta cada, jogando a primeira', () => {
+    const state = play(opened('8', '8', '9'), { type: 'split' })
+    expect(state.hands).toHaveLength(2)
+    expect(state.hands[0]).toMatchObject({ cards: ['8'], status: 'active', fromSplit: true })
+    expect(state.hands[1]).toMatchObject({ cards: ['8'], status: 'pending', fromSplit: true })
+    expect(state.activeIndex).toBe(0)
+  })
+
+  it('as mãos têm ids distintos', () => {
+    const state = play(opened('8', '8', '9'), { type: 'split' })
+    expect(state.hands[0].id).not.toBe(state.hands[1].id)
+  })
+
+  it('encerrada a primeira mão, a segunda vira a ativa', () => {
+    const state = play(opened('8', '8', '9'), { type: 'split' }, card('10'), { type: 'stand' })
+    expect(state.hands[0].status).toBe('stood')
+    expect(state.activeIndex).toBe(1)
+    expect(state.step).toBe('playing')
+  })
+
+  it('a rodada só acaba quando todas as mãos acabam', () => {
+    const state = play(
+      opened('8', '8', '9'),
+      { type: 'split' },
+      card('10'),
+      { type: 'stand' },
+      card('10'),
+      { type: 'stand' }
+    )
+    expect(state.step).toBe('done')
+    expect(state.hands.every((hand) => hand.status === 'stood')).toBe(true)
+  })
+
+  /** Dobra após separar é permitida — as tabelas de básica deste projeto assumem isso. */
+  it('dobra depois de separar', () => {
+    const state = play(opened('8', '8', '9'), { type: 'split' }, card('3'), { type: 'double' })
+    expect(state.hands[0].doubling).toBe(true)
+  })
+
+  it('re-separa um par que aparece depois da separação', () => {
+    const state = play(opened('8', '8', '9'), { type: 'split' }, card('8'), { type: 'split' })
+    expect(state.hands).toHaveLength(3)
+  })
+
+  it('para de separar no limite de mãos', () => {
+    let state = play(opened('8', '8', '9'), { type: 'split' })
+    while (state.hands.length < MAX_HANDS) {
+      state = play(state, card('8'), { type: 'split' })
+    }
+    expect(state.hands).toHaveLength(MAX_HANDS)
+    const blocked = play(state, card('8'), { type: 'split' })
+    expect(blocked.hands).toHaveLength(MAX_HANDS)
+  })
+
+  /**
+   * Ases separados recebem uma carta e encerram. É regra padrão de cassino, e
+   * ignorá-la faria o overlay oferecer "pedir" numa mão que a mesa já fechou —
+   * conselho errado com cara de certo.
+   */
+  it('ases separados recebem uma carta e encerram', () => {
+    const state = play(opened('A', 'A', '9'), { type: 'split' }, card('6'))
+    expect(state.hands[0]).toMatchObject({ cards: ['A', '6'], status: 'stood' })
+    expect(state.activeIndex).toBe(1)
+  })
+
+  /** 21 vindo de ases separados não é blackjack natural. */
+  it('ás separado com 10 fecha como mão comum, não blackjack', () => {
+    const state = play(opened('A', 'A', '9'), { type: 'split' }, card('10'))
+    expect(state.hands[0].status).toBe('stood')
+  })
+
+  it('não separa o que não é par', () => {
+    const state = opened('10', '6', '9')
+    expect(play(state, { type: 'split' })).toEqual(state)
   })
 })
