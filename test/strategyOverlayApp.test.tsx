@@ -55,4 +55,30 @@ describe('StrategyOverlayApp', () => {
     const { container } = render(<StrategyOverlayApp />)
     expect(container.firstChild).toBe(null)
   })
+
+  /**
+   * Travado o overlay é click-through: qualquer área que capture o mouse
+   * roubaria clique do jogo.
+   */
+  it('travado não mostra a alça de redimensionar', async () => {
+    stubApi(
+      snapshot({
+        strategyOverlay: { ...DEFAULT_SETTINGS.strategyOverlay, locked: true }
+      })
+    )
+    render(<StrategyOverlayApp />)
+    await screen.findByText('Sua mão')
+    expect(screen.queryByRole('slider', { name: /redimensionar/i })).toBeNull()
+  })
+
+  it('destravado mostra a alça', async () => {
+    stubApi(
+      snapshot({
+        strategyOverlay: { ...DEFAULT_SETTINGS.strategyOverlay, locked: false }
+      })
+    )
+    render(<StrategyOverlayApp />)
+    await screen.findByText('Sua mão')
+    expect(screen.getByRole('slider', { name: /redimensionar/i })).toBeTruthy()
+  })
 })
