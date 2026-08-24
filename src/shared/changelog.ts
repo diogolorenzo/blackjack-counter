@@ -15,6 +15,17 @@ export interface ChangelogEntry {
  */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '0.4.0',
+    date: '2026-08-24',
+    changes: [
+      'O overlay de jogada agora responde sobre a SUA mão: clique nas suas cartas e na do dealer e ele diz o que fazer, com a explicação do índice quando a contagem muda a jogada.',
+      'Separação completa: até quatro mãos, re-separação, ases separados com uma carta só e dobra depois de separar.',
+      'Desfazer no overlay: clique errado tira a última carta em vez de recomeçar a rodada.',
+      'O overlay de jogada funciona no KO, mostrando a estratégia básica — antes ele só explicava por que não podia ajudar.',
+      'Os modos guia e matriz saíram do overlay; os dois continuam na aba Desvios da janela principal.'
+    ]
+  },
+  {
     version: '0.3.0',
     date: '2026-08-22',
     changes: [

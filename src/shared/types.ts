@@ -112,6 +112,9 @@ export type OverlayLayout = 'full' | 'minimal'
 /** `colorblind` troca verde/vermelho por azul/laranja (deuteranopia/protanopia). */
 export type Palette = 'default' | 'colorblind'
 
+/** Tamanho das teclas de rank no overlay de jogada. */
+export type KeypadDensity = 'compact' | 'comfortable'
+
 /** Como a aba de desvios se apresenta. */
 export type DeviationsLayout = 'list' | 'matrix'
 
@@ -156,12 +159,20 @@ export interface OverlaySettings extends OverlayPlacement {
   showCurrency: boolean
 }
 
-/** `guide` mostra só o que a contagem mudou; `matrix` é o chart completo. */
-export type StrategyOverlayLayout = 'guide' | 'matrix'
+export const KEYPAD_DENSITIES: readonly KeypadDensity[] = ['compact', 'comfortable']
+
+/** Faixa do reset automático, em segundos. 0 = só manual. */
+export const AUTO_RESET_RANGE = { min: 0, max: 30 } as const
 
 export interface StrategyOverlaySettings extends OverlayPlacement {
   size: OverlaySize
-  layout: StrategyOverlayLayout
+  /** Pede o upcard do dealer antes das cartas do jogador. */
+  dealerFirst: boolean
+  /** Mostra a linha de índice e distância sob a jogada. */
+  showReason: boolean
+  /** Segundos até limpar a rodada encerrada sozinha. 0 = manual. */
+  autoResetSeconds: number
+  keypadDensity: KeypadDensity
 }
 
 export interface FeedbackSettings {

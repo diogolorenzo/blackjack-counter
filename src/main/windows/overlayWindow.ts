@@ -12,6 +12,17 @@ export interface OverlayWindowSpec {
   /** Tamanho do preset em vigor, já resolvido por layout pelo chamador. */
   getPresetSize: () => Size
   getLimits: () => SizeLimits
+  /**
+   * Se `locked` vira clique-através quando travado.
+   *
+   * O overlay de contagem é só leitura: travado, os cliques devem atravessar
+   * para o jogo por baixo. O overlay de jogada É a superfície de input — o
+   * teclado de ranks só funciona recebendo clique —, então para ele `locked`
+   * significa apenas "não arrasta, sem alça de redimensionar", nunca
+   * clique-através. Sem essa distinção o overlay de jogada nasce travado (o
+   * default de `locked`) e o teclado fica inutilizável desde a instalação.
+   */
+  clickThroughWhenLocked: boolean
   onMoved: (pos: { x: number; y: number }) => void
   onResized: (size: Size) => void
 }
@@ -209,7 +220,7 @@ export function createOverlayWindow(spec: OverlayWindowSpec): OverlayController 
 
     // forward: true mantém o renderer recebendo mousemove mesmo com o clique
     // atravessando para o jogo — sem isso o overlay perde qualquer hover.
-    if (locked) target.setIgnoreMouseEvents(true, { forward: true })
+    if (locked && spec.clickThroughWhenLocked) target.setIgnoreMouseEvents(true, { forward: true })
     else target.setIgnoreMouseEvents(false)
   }
 

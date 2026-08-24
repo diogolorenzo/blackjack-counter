@@ -133,6 +133,8 @@ function bootstrap(): void {
     getPlacement: () => controller.getSnapshot().settings.overlay,
     getPresetSize: () => OVERLAY_SIZES[controller.getSnapshot().settings.overlay.size],
     getLimits: () => OVERLAY_SIZE_LIMITS.count,
+    // Overlay de contagem é só leitura: travado, os cliques atravessam para o jogo.
+    clickThroughWhenLocked: true,
     onMoved: (customPosition) => {
       controller.updateSettings({ overlay: { customPosition } })
     },
@@ -145,14 +147,10 @@ function bootstrap(): void {
   const strategyController = createOverlayWindow({
     page: 'strategy.html',
     getPlacement: () => controller.getSnapshot().settings.strategyOverlay,
-    getPresetSize: () => {
-      const { layout, size } = controller.getSnapshot().settings.strategyOverlay
-      return STRATEGY_OVERLAY_SIZES[layout][size]
-    },
-    getLimits: () =>
-      controller.getSnapshot().settings.strategyOverlay.layout === 'matrix'
-        ? OVERLAY_SIZE_LIMITS.strategyMatrix
-        : OVERLAY_SIZE_LIMITS.strategyGuide,
+    getPresetSize: () => STRATEGY_OVERLAY_SIZES[controller.getSnapshot().settings.strategyOverlay.size],
+    getLimits: () => OVERLAY_SIZE_LIMITS.strategyHand,
+    // Overlay de jogada é a superfície de input: travado, o teclado continua clicável.
+    clickThroughWhenLocked: false,
     onMoved: (customPosition) => {
       controller.updateSettings({ strategyOverlay: { customPosition } })
     },

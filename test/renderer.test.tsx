@@ -326,13 +326,13 @@ describe('tamanho arrastado nos ajustes', () => {
 })
 
 describe('ajustes do overlay de jogada', () => {
-  it('trocar para matriz emite o patch', async () => {
+  it('trocar a ordem para dealer emite o patch', async () => {
     const api = stubApi(snapshot())
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Matriz' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Dealer' }))
     expect(api.updateSettings).toHaveBeenCalledWith({
-      strategyOverlay: { layout: 'matrix', customSize: null }
+      strategyOverlay: { dealerFirst: true }
     })
   })
 

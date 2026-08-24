@@ -108,9 +108,9 @@ export function registerIpcHandlers(deps: {
   }
 
   /**
-   * `presetChanged` entra por fora porque `size` e `layout` moram nos tipos
-   * concretos de cada overlay, não em OverlayPlacement — e nos dois casos eles
-   * mudam o tamanho da janela.
+   * `presetChanged` entra por fora porque `size` (nos dois overlays) e
+   * `layout` (só no de contagem) moram nos tipos concretos, não em
+   * OverlayPlacement — e onde existem, os dois mudam o tamanho da janela.
    */
   const syncOverlay = (
     before: OverlayPlacement,
@@ -151,8 +151,7 @@ export function registerIpcHandlers(deps: {
     syncOverlay(
       before.strategyOverlay,
       after.strategyOverlay,
-      before.strategyOverlay.size !== after.strategyOverlay.size ||
-        before.strategyOverlay.layout !== after.strategyOverlay.layout,
+      before.strategyOverlay.size !== after.strategyOverlay.size,
       strategyOverlay
     )
     return controller.getSnapshot()
