@@ -2,6 +2,7 @@ import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 
 import { shouldCheck, visibleStatus } from './policy'
+import { createSimulatedUpdater, fakeVersionFrom } from './simulator'
 import type { UpdateState } from './policy'
 import type { UpdateStatus } from '@shared/types'
 
@@ -41,8 +42,14 @@ export function createUpdaterController(deps: {
   }
 
   // Em `electron-vite dev` não existe app empacotado nem app-update.yml: checar
-  // aqui só produziria erro a cada boot de desenvolvimento.
+  // aqui só produziria erro a cada boot de desenvolvimento. Com
+  // COUNTER_FAKE_UPDATE o simulador entra no lugar, para conferir o visual da
+  // pílula sem depender de uma release publicada.
   if (!app.isPackaged) {
+    const fake = fakeVersionFrom(process.env.COUNTER_FAKE_UPDATE)
+    if (fake !== null) {
+      return createSimulatedUpdater({ broadcast: deps.broadcast, version: fake })
+    }
     return {
       install: () => {},
       dismiss: () => {},

@@ -1,0 +1,97 @@
+name: Release
+
+# Publica no merge para main. O gatilho é a `version` do package.json: se ainda
+# não existe release com a tag dela, este workflow empacota e publica. Um ajuste
+# que não mexe na versão não vira release — e não deveria: o electron-updater só
+# oferece atualização para uma versão MAIOR que a instalada, então republicar a
+# mesma versão não avisaria ninguém.
+#
+# É a automação do procedimento manual descrito no README, armadilha do
+# rascunho incluída.
+on:
+  push:
+    branches: [main]
+  # Escape hatch: republicar uma versão cujo build falhou, sem commit vazio.
+  workflow_dispatch:
+
+# Duas execuções da mesma versão em paralelo disputariam o mesmo latest.yml.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    # electron-builder e o gh sobem artefatos e editam a release.
+    permissions:
+      contents: write
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Versão do package.json
+        id: version
+        shell: bash
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # A release existente é o registro de que aquela versão saiu. Sem esta
+      # guarda, todo push para main tentaria republicar a mesma versão e o
+      # electron-builder falharia ao subir um artefato que já está lá.
+      - name: A versão já foi publicada?
+        id: published
+        shell: bash
+        env:
+          TAG: v${{ steps.version.outputs.value }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG já existe; nada a publicar."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Mesma verificação do CI. Uma release quebrada chega sozinha ao usuário
+      # pelo auto-update, então ela roda aqui também, não só no PR.
+      - name: Testes
+        if: steps.published.outputs.skip == 'false'
+        run: npm test
+
+      # O rascunho vem antes de propósito: se a release não existir, cada
+      # publisher do electron-builder cria uma própria com a mesma tag e sobram
+      # dois rascunhos incompletos — um com o .exe, outro só com o .blockmap — e
+      # o auto-update quebra. Com o rascunho pronto, todos escrevem no mesmo
+      # lugar. Rascunho também esconde a release enquanto os artefatos sobem:
+      # nenhum app instalado enxerga uma versão pela metade.
+      - name: Cria a release como rascunho
+        if: steps.published.outputs.skip == 'false'
+        shell: bash
+        env:
+          TAG: v${{ steps.version.outputs.value }}
+          TITLE: ${{ steps.version.outputs.value }}
+        run: gh release create "$TAG" --draft --title "$TITLE" --generate-notes --repo "$GITHUB_REPOSITORY"
+
+      # Sobe o .exe, o .blockmap (download diferencial) e o latest.yml — este
+      # último é o arquivo que os apps instalados leem para descobrir que existe
+      # versão nova. Sem os três, o auto-update não enxerga a release.
+      - name: Empacota e sobe os artefatos
+        if: steps.published.outputs.skip == 'false'
+        run: npm run build:win -- --publish always
+
+      # Enquanto for rascunho, nenhum app instalado enxerga a atualização.
+      - name: Publica
+        if: steps.published.outputs.skip == 'false'
+        shell: bash
+        env:
+          TAG: v${{ steps.version.outputs.value }}
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"

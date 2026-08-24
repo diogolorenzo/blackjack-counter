@@ -28,40 +28,44 @@ npm run build:win
 ## Publicar uma atualização
 
 Quem já instalou não precisa baixar nada de novo — o app se atualiza sozinho
-(veja [Atualizações](#atualizações)). Para lançar uma versão:
+(veja [Atualizações](#atualizações)). Publicar é automático: o workflow
+`.github/workflows/release.yml` roda a cada merge para `main` e lança a versão
+que estiver no `package.json`. Para lançar uma versão, então, basta o commit:
 
 1. suba a `version` no `package.json`;
 2. escreva a entrada correspondente em `src/shared/changelog.ts` — o `npm test`
    falha se ela não existir, de propósito: é o que o usuário lê na Ajuda para
    saber o que acabou de receber;
-3. **crie a release como rascunho antes de publicar** (veja a armadilha abaixo);
-4. rode o comando abaixo, com um token do GitHub em `GH_TOKEN`.
+3. faça o merge para `main`.
 
-```bash
-gh release create v0.3.0 --draft --title 0.3.0 --notes "o que mudou"
-```
+**O gatilho é a versão, não o merge.** Se o `package.json` continuar na versão
+já publicada, o workflow não faz nada e ninguém é avisado — é assim de
+propósito, porque o electron-updater só oferece atualização para uma versão
+MAIOR que a instalada. Merge de ajuste que não sobe a versão não vira release;
+ele entra na próxima.
 
-```bash
-npm run build:win -- --publish always
-```
+O que o workflow faz, na ordem: confere se já existe release com a tag
+`v<versão>` (se existe, para por aí), roda os testes, **cria a release como
+rascunho**, empacota com `--publish always` e só então tira do rascunho.
 
-Isso sobe para a release o `.exe`, o `.blockmap` (usado no download diferencial)
-e o `latest.yml` — o arquivo que os apps instalados leem para descobrir que
-existe versão nova. Sem os três, o auto-update não enxerga a release.
+Cada passo desses existe por um motivo:
 
-Por último, tire do rascunho — **enquanto for draft, nenhum app instalado
-enxerga a atualização**:
+- **o rascunho vem antes** porque, se a release não existir, o electron-builder
+  sobe os artefatos em paralelo e cada publisher cria uma release própria com a
+  mesma tag — o resultado são dois rascunhos, um com o `.exe` e outro só com o
+  `.blockmap`, e um auto-update quebrado. Com o rascunho pronto, todos escrevem
+  no mesmo lugar;
+- **o `--publish always`** sobe o `.exe`, o `.blockmap` (usado no download
+  diferencial) e o `latest.yml` — o arquivo que os apps instalados leem para
+  descobrir que existe versão nova. Sem os três, o auto-update não enxerga a
+  release;
+- **tirar do rascunho é o último passo** porque, enquanto for draft, nenhum app
+  instalado enxerga a atualização — o que também serve para esconder a release
+  enquanto os artefatos ainda estão subindo.
 
-```bash
-gh release edit v0.3.0 --draft=false
-```
-
-**A armadilha:** se a release ainda não existir, o electron-builder sobe os
-artefatos em paralelo e cada publisher cria uma release própria com a mesma tag
-— o resultado são dois rascunhos, um com o `.exe` e outro só com o `.blockmap`,
-e um auto-update quebrado. Criar o rascunho antes faz os dois publishers
-escreverem no mesmo lugar. Se acontecer mesmo assim, confira com
-`gh api repos/diogolorenzo/blackjack-counter/releases` antes de publicar.
+Se um build falhar no meio, `workflow_dispatch` republica a mesma versão sem
+precisar de commit vazio. Para conferir o estado depois de uma falha:
+`gh api repos/diogolorenzo/blackjack-counter/releases`.
 
 ## Atalhos
 
@@ -324,7 +328,18 @@ próximo fechamento de verdade (pela bandeja), dispensada ou não.
 Falha de rede não vira popup: sem internet o app abre e conta normalmente.
 
 Em desenvolvimento (`npm run dev`) nada disso roda — não há app empacotado para
-atualizar.
+atualizar. Para conferir o visual da pílula sem publicar uma release, a env var
+`COUNTER_FAKE_UPDATE` liga um updater de mentira que percorre os mesmos estados
+(baixando 0..100 -> pronta), pela mesma `visibleStatus` da versão real:
+
+```bash
+COUNTER_FAKE_UPDATE=1 npm run dev       # anuncia a versão de fachada 9.9.9
+COUNTER_FAKE_UPDATE=0.5.0 npm run dev   # anuncia a versão que você quiser
+```
+
+A pílula aparece 1,5 s depois da janela e leva ~7 s até "pronta". Nesse modo o
+botão "Reiniciar" não reinstala nada — em dev não há o que instalar; ele
+recomeça o ciclo, para rever a animação sem reabrir o app.
 
 ## Onde ficam os arquivos
 
