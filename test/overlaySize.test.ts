@@ -108,21 +108,27 @@ describe('tabelas de tamanho', () => {
   })
 
   /**
-   * O overlay de jogada tem proporção fixa: preset fora dela corta o layout
-   * embaixo, e como o contêiner é overflow-hidden o corte não deixa sinal na
-   * tela.
+   * O overlay de jogada tem proporção fixa: preset mais baixo que ela corta o
+   * layout embaixo, e como o contêiner é overflow-hidden o corte não deixa
+   * sinal na tela. `toBeCloseTo(ratio, 1)` deixava passar até ±0.05 de erro —
+   * um preset 10px mais baixo que o devido cabia dentro dessa tolerância sem
+   * acusar nada. Por isso a asserção é a propriedade real (altura mínima para
+   * não cortar) e não uma proximidade numérica: errar para mais alto só
+   * sobra margem (inofensivo), errar para mais baixo corta (o bug daqui).
+   * O teto (max) fica de fora de propósito: pode fugir da proporção à
+   * vontade, daí só sobra margem em volta do conteúdo, nunca corte.
    */
-  it('os presets do overlay de jogada seguem a proporção do canvas', () => {
+  it('os presets do overlay de jogada nunca ficam mais baixos que a proporção do canvas', () => {
     const ratio = STRATEGY_HAND_CANVAS.height / STRATEGY_HAND_CANVAS.width
     for (const [name, size] of Object.entries(STRATEGY_OVERLAY_SIZES)) {
-      expect(size.height / size.width, `preset ${name}`).toBeCloseTo(ratio, 1)
+      expect(size.height, `preset ${name}`).toBeGreaterThanOrEqual(Math.ceil(size.width * ratio))
     }
   })
 
-  it('o piso do overlay de jogada também segue a proporção', () => {
+  it('o piso do overlay de jogada também nunca fica mais baixo que a proporção', () => {
     const ratio = STRATEGY_HAND_CANVAS.height / STRATEGY_HAND_CANVAS.width
     const { min } = OVERLAY_SIZE_LIMITS.strategyHand
-    expect(min.height / min.width).toBeCloseTo(ratio, 1)
+    expect(min.height).toBeGreaterThanOrEqual(Math.ceil(min.width * ratio))
   })
 
   it('os presets cabem entre o piso e o teto', () => {
