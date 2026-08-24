@@ -6,7 +6,7 @@
  * da matriz", mais as restrições que a matriz não conhece (já pedi carta, já
  * separei três vezes).
  */
-import { basicAction, cellDecision, fallbackAction } from './basicStrategy'
+import { basicAction, basicFallback, cellDecision, fallbackAction } from './basicStrategy'
 import type { StrategyRules, Upcard } from './basicStrategy'
 import type { PlayAction } from './deviations'
 import { handRowKey, handValue } from './hand'
@@ -73,7 +73,9 @@ export function decideHand(
   }
 
   const restrict = (action: PlayAction): PlayAction => {
-    if (action === 'double' && !canDouble) return fallbackAction(action)
+    // `D` e `V` colapsam em 'double' antes de chegar aqui; só o código cru da
+    // célula (via basicFallback) sabe se a falta de dobra vira pedir ou ficar.
+    if (action === 'double' && !canDouble) return basicFallback(lookup.key, upcard, rules) ?? fallbackAction(action)
     if (action === 'surrender' && !canSurrender) return fallbackAction(action)
     return action
   }

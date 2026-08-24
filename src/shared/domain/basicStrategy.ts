@@ -154,6 +154,25 @@ export function basicAction(
   return ACTION_BY_CODE[code]
 }
 
+/**
+ * Ação da mesma célula quando dobrar não é possível (já pediu carta, por
+ * exemplo), resolvida pelo código cru da tabela — `D` vira pedir, `V` vira
+ * ficar. `fallbackAction` sozinho não sabe dessa diferença: ele colapsa os
+ * dois códigos em `double` antes de chegar aqui e por isso trataria `V` como
+ * se fosse `D`, mandando pedir onde a estratégia básica manda ficar (mole 18
+ * vs 4, por exemplo).
+ */
+export function basicFallback(
+  handKey: string,
+  upcard: Upcard,
+  rules: StrategyRules = DEFAULT_STRATEGY_RULES
+): PlayAction | null {
+  const code = codeAt(handKey, upcard)
+  if (code === null) return null
+  if (code === 'R' && !rules.surrender) return FALLBACK_BY_CODE.R
+  return FALLBACK_BY_CODE[code]
+}
+
 export interface CellDecision {
   action: PlayAction
   /** A jogada mudou por causa da contagem, em relação à básica desta mesa? */

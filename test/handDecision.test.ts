@@ -79,6 +79,26 @@ describe('decideHand', () => {
     ).toBe(false)
   })
 
+  /**
+   * soft-18 é código `V` (dobra, senão FICA) — diferente de um código `D`
+   * (dobra, senão PEDE). Sem distinguir os dois a mão vira pedir e um mole 18
+   * de três cartas recebe a jogada errada rotulada como básica.
+   */
+  it('mole 18 vs 4 com duas cartas dobra', () => {
+    const result = decideHand(hand(['A', '7']), '4', 0, rules, true, 1)
+    expect(result.action).toBe('double')
+  })
+
+  it('mole 18 vs 4 com três cartas fica, não pede (código V, não D)', () => {
+    const result = decideHand(hand(['A', '3', '4']), '4', 0, rules, true, 1)
+    expect(result.action).toBe('stand')
+  })
+
+  it('linha de código D (duro 11) com três cartas cai para pedir', () => {
+    const result = decideHand(hand(['3', '3', '5']), '5', 0, rules, true, 1)
+    expect(result.action).toBe('hit')
+  })
+
   it('mão estourada não tem jogada nem ações', () => {
     const result = decideHand(hand(['10', '9', '5']), '10', 0, rules, true, 1)
     expect(result.canDouble).toBe(false)
