@@ -74,6 +74,10 @@ export function createSimulatedUpdater(deps: {
     state.percent = Math.min(100, state.percent + STEP_PERCENT)
     if (state.percent >= 100) {
       state.phase = 'ready'
+      // Mesmo desarme do 'update-downloaded' real: dispensar o progresso não
+      // pode esconder o "pronta". Sem isto, um × durante o download deixaria a
+      // pílula muda justo no estado que interessa ver.
+      state.dismissed = false
       emit()
       return
     }

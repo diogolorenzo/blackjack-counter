@@ -76,6 +76,21 @@ describe('createSimulatedUpdater', () => {
     updater.dispose()
   })
 
+  /**
+   * Mesmo desarme do 'update-downloaded' real: dispensar o progresso não pode
+   * esconder o "pronta", que é justamente o estado que se quer ver.
+   */
+  it('dispensar durante o download não esconde a pílula pronta', () => {
+    const updater = start()
+    vi.advanceTimersByTime(1_500)
+    updater.dismiss()
+    expect(updater.status()).toBeNull()
+
+    vi.advanceTimersByTime(700 * 10)
+    expect(updater.status()).toEqual({ phase: 'ready', version: '9.9.9', percent: 100 })
+    updater.dispose()
+  })
+
   /** Em dev não há o que instalar; reiniciar o ciclo permite rever a animação. */
   it('instalar recomeça o ciclo em vez de reiniciar o app', () => {
     const updater = start()

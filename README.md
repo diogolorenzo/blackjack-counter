@@ -64,7 +64,9 @@ Cada passo desses existe por um motivo:
   enquanto os artefatos ainda estão subindo.
 
 Se um build falhar no meio, `workflow_dispatch` republica a mesma versão sem
-precisar de commit vazio. Para conferir o estado depois de uma falha:
+precisar de commit vazio: a guarda olha o `isDraft`, então o rascunho encalhado
+pela falha é reaproveitado em vez de bloquear a reexecução — só release já
+publicada faz o workflow parar. Para conferir o estado depois de uma falha:
 `gh api repos/diogolorenzo/blackjack-counter/releases`.
 
 ## Atalhos

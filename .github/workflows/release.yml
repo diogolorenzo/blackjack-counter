@@ -45,21 +45,39 @@ jobs:
         shell: bash
         run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      # A release existente é o registro de que aquela versão saiu. Sem esta
+      # A release PUBLICADA é o registro de que aquela versão saiu. Sem esta
       # guarda, todo push para main tentaria republicar a mesma versão e o
       # electron-builder falharia ao subir um artefato que já está lá.
+      #
+      # Rascunho não conta como publicada — é o rastro de uma execução que
+      # morreu no meio, e `gh release view` não distingue os dois sozinho. Sem
+      # olhar o isDraft, o workflow_dispatch que existe justamente para
+      # reprocessar essa falha veria a release e pularia tudo, deixando o
+      # rascunho encalhado para limpeza manual.
       - name: A versão já foi publicada?
         id: published
         shell: bash
         env:
           TAG: v${{ steps.version.outputs.value }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "Release $TAG já existe; nada a publicar."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          estado=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo ausente)
+
+          case "$estado" in
+            false)
+              echo "Release $TAG já publicada; nada a fazer."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "draft=false" >> "$GITHUB_OUTPUT"
+              ;;
+            true)
+              echo "Rascunho de $TAG encalhado de uma execução anterior; reaproveitando."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              echo "draft=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              echo "draft=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
       # Mesma verificação do CI. Uma release quebrada chega sozinha ao usuário
       # pelo auto-update, então ela roda aqui também, não só no PR.
@@ -73,8 +91,12 @@ jobs:
       # o auto-update quebra. Com o rascunho pronto, todos escrevem no mesmo
       # lugar. Rascunho também esconde a release enquanto os artefatos sobem:
       # nenhum app instalado enxerga uma versão pela metade.
+      #
+      # Pulado quando já existe um rascunho: nesse caso ele é reaproveitado, e
+      # o electron-builder substitui os artefatos que porventura subiram antes
+      # da falha.
       - name: Cria a release como rascunho
-        if: steps.published.outputs.skip == 'false'
+        if: steps.published.outputs.skip == 'false' && steps.published.outputs.draft == 'false'
         shell: bash
         env:
           TAG: v${{ steps.version.outputs.value }}
