@@ -173,8 +173,8 @@ export const STRATEGY_OVERLAY_CARD_BORDER = 2
  * escala por `zoom` até caber.
  *
  * Derivado dos tamanhos que os elementos do HandRound especificam (não medido
- * em Chromium — reconferir contra o app rodando é o passo seguinte fora desta
- * task). A PROPORÇÃO é o que importa aqui: os presets de STRATEGY_OVERLAY_SIZES
+ * em Chromium — ainda falta reconferir contra o app rodando). A PROPORÇÃO é o
+ * que importa aqui: os presets de STRATEGY_OVERLAY_SIZES
  * dependem dela — um preset mais baixo que height/width corta o layout embaixo,
  * e como o contêiner é overflow-hidden o corte não deixa nenhum sinal na tela.
  */

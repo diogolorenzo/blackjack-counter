@@ -55,6 +55,15 @@ export function HandRound({
   const [awaitingCard, setAwaitingCard] = useState(false)
 
   /*
+    Pedir carta não passa pelo reducer até a carta chegar — diferente de
+    dobrar e separar, que já commitam no clique. Sem distinguir os dois,
+    Desfazer com o teclado aberto por um Pedir chamaria `undo` e removeria a
+    carta anterior de verdade, já commitada, em vez de só cancelar o pedido
+    que ainda não tocou o reducer.
+  */
+  const [hitPending, setHitPending] = useState(false)
+
+  /*
     Trocar a ordem do fluxo nos ajustes precisa recomeçar a rodada: o passo
     inicial faz parte do estado, e um `dealerFirst` novo com uma rodada no meio
     deixaria a tela pedindo uma carta que o reducer não aceita.
@@ -63,12 +72,14 @@ export function HandRound({
     if (round.dealerFirst !== dealerFirst) {
       dispatch({ type: 'reset', dealerFirst })
       setAwaitingCard(false)
+      setHitPending(false)
     }
   }, [dealerFirst, round.dealerFirst])
 
   useEffect(() => {
     if (round.step !== 'done') return
     setAwaitingCard(false)
+    setHitPending(false)
     if (autoResetSeconds <= 0) return
     const timer = setTimeout(() => dispatch({ type: 'reset' }), autoResetSeconds * 1000)
     return () => clearTimeout(timer)
@@ -98,6 +109,7 @@ export function HandRound({
   const pickCard = (rank: Rank) => {
     dispatch({ type: 'addCard', rank })
     setAwaitingCard(false)
+    setHitPending(false)
   }
 
   const prompt =
@@ -159,7 +171,10 @@ export function HandRound({
           decision={decision}
           showReason={showReason}
           decisionCount={decisionCount}
-          onHit={() => setAwaitingCard(true)}
+          onHit={() => {
+            setAwaitingCard(true)
+            setHitPending(true)
+          }}
           onStand={() => dispatch({ type: 'stand' })}
           // Dobrar e separar exigem a carta seguinte: as duas voltam ao teclado.
           onDouble={() => {
@@ -179,6 +194,14 @@ export function HandRound({
       <button
         type="button"
         onClick={() => {
+          // Um Pedir pendente ainda não tocou o reducer: desfazer aqui é só
+          // cancelar o pedido, nunca chamar `undo`, que removeria a carta
+          // anterior — essa sim já commitada de verdade.
+          if (hitPending) {
+            setAwaitingCard(false)
+            setHitPending(false)
+            return
+          }
           dispatch({ type: 'undo' })
           setAwaitingCard(false)
         }}

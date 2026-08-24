@@ -140,6 +140,27 @@ describe('HandRound', () => {
     expect(screen.queryByTestId('decision')).toBe(null)
   })
 
+  /**
+   * Pedir carta não passa pelo reducer até a carta chegar — diferente de
+   * dobrar e separar, que já commitam no clique. Sem distinguir os dois,
+   * Desfazer com o teclado aberto por um Pedir chamaria `undo` e removeria a
+   * carta anterior de verdade em vez de só cancelar o pedido pendente.
+   */
+  it('desfazer com o teclado aberto por um Pedir cancela o pedido, não remove carta de verdade', () => {
+    render(<HandRound {...defaults} decisionCount={-2} />)
+    pick('10')
+    pick('6')
+    pick('10')
+    expect(screen.getByTestId('decision')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pedir' }))
+    expect(screen.queryByTestId('decision')).toBe(null)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }))
+    expect(screen.getByTestId('decision')).toBeTruthy()
+    expect(screen.getByText(/Você 10 6/)).toBeTruthy()
+  })
+
   it('mostra o seguro só contra ás', () => {
     render(<HandRound {...defaults} insuranceOn />)
     pick('10')
