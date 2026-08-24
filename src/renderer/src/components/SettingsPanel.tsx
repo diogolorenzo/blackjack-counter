@@ -763,7 +763,7 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
           </div>
         </Field>
 
-        <Field label="Travar (click-through)" hint="Destravado permite arrastar e redimensionar">
+        <Field label="Travar" hint="Destravado permite arrastar e redimensionar; o teclado recebe clique nos dois estados">
           <Toggle
             checked={strategyOverlay.locked}
             label="Travar overlay de jogada"

@@ -17,6 +17,7 @@ interface FakeOptions {
 }
 
 let created: FakeOptions | null = null
+let ignoreMouseEventsCalls: { ignore: boolean; forward?: boolean }[] = []
 
 class FakeWindow {
   destroyed = false
@@ -55,7 +56,9 @@ class FakeWindow {
   }
   setAlwaysOnTop(): void {}
   setVisibleOnAllWorkspaces(): void {}
-  setIgnoreMouseEvents(): void {}
+  setIgnoreMouseEvents(ignore: boolean, options?: { forward?: boolean }): void {
+    ignoreMouseEventsCalls.push({ ignore, forward: options?.forward })
+  }
   showInactive(): void {}
   hide(): void {}
   destroy(): void {
@@ -88,7 +91,10 @@ function fire(event: string): void {
   for (const cb of listeners.get(event) ?? []) cb()
 }
 
-function setup(placement: Partial<OverlayPlacement> = {}) {
+function setup(
+  placement: Partial<OverlayPlacement> = {},
+  clickThroughWhenLocked = true
+) {
   const moves: { x: number; y: number }[] = []
   const resizes: { width: number; height: number }[] = []
   const current: OverlayPlacement = { ...DEFAULT_SETTINGS.overlay, ...placement }
@@ -98,6 +104,7 @@ function setup(placement: Partial<OverlayPlacement> = {}) {
     getPlacement: () => current,
     getPresetSize: () => OVERLAY_SIZES.medium,
     getLimits: () => OVERLAY_SIZE_LIMITS.count,
+    clickThroughWhenLocked,
     onMoved: (pos) => moves.push(pos),
     onResized: (size) => resizes.push(size)
   })
@@ -111,6 +118,7 @@ beforeEach(() => {
   resizable = false
   loaded = ''
   created = null
+  ignoreMouseEventsCalls = []
   vi.useFakeTimers()
 })
 
@@ -267,5 +275,36 @@ describe('createOverlayWindow', () => {
     const { controller } = setup()
     controller.ensure()
     expect(loaded).toContain('overlay.html')
+  })
+
+  /**
+   * O overlay de contagem é só leitura: travado, os cliques devem atravessar
+   * para o jogo por baixo.
+   */
+  it('overlay de contagem travado vira clique-através', () => {
+    const { controller } = setup({ locked: true }, true)
+    controller.ensure()
+    expect(ignoreMouseEventsCalls).toContainEqual({ ignore: true, forward: true })
+  })
+
+  /**
+   * O overlay de jogada é a superfície de input — o teclado de ranks só
+   * funciona recebendo clique —, então travado ele nunca vira clique-através,
+   * diferente do overlay de contagem.
+   */
+  it('overlay de jogada travado nunca vira clique-através', () => {
+    const { controller } = setup({ locked: true }, false)
+    controller.ensure()
+    expect(ignoreMouseEventsCalls).not.toContainEqual(
+      expect.objectContaining({ ignore: true })
+    )
+  })
+
+  it('overlay de jogada destravado também não é clique-através', () => {
+    const { controller } = setup({ locked: false }, false)
+    controller.ensure()
+    expect(ignoreMouseEventsCalls).not.toContainEqual(
+      expect.objectContaining({ ignore: true })
+    )
   })
 })
