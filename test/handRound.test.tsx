@@ -120,6 +120,26 @@ describe('HandRound', () => {
     expect(screen.getByText('Sua mão')).toBeTruthy()
   })
 
+  /**
+   * `doubling` some do estado de tela quando o desfazer restaura a mão: sem
+   * incluir `hand.doubling` em `needsCard`, uma mão que já dobrou volta a
+   * mostrar o painel de decisão, oferecendo pedir/separar/ficar numa mão que
+   * a mesa já fechou.
+   */
+  it('desfazer depois de dobrar e fechar a mão devolve o teclado, não o painel', () => {
+    render(<HandRound {...defaults} />)
+    pick('5')
+    pick('5')
+    pick('9')
+    fireEvent.click(screen.getByRole('button', { name: 'Dobrar' }))
+    pick('9')
+    expect(screen.getByRole('button', { name: 'Nova mão' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }))
+    expect(screen.getByRole('button', { name: 'carta 9' })).toBeTruthy()
+    expect(screen.queryByTestId('decision')).toBe(null)
+  })
+
   it('mostra o seguro só contra ás', () => {
     render(<HandRound {...defaults} insuranceOn />)
     pick('10')

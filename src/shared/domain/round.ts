@@ -206,7 +206,9 @@ function split(state: RoundState): RoundState {
 
   const hand = state.hands[state.activeIndex]
   const [first, second] = hand.cards
-  if (hand.cards.length !== 2 || first !== second) return state
+  // Igual ao guard de startDouble: uma mão que já dobrou não tem mais decisão
+  // a tomar, então separar é impossível — no jogo real e aqui.
+  if (hand.cards.length !== 2 || first !== second || hand.doubling) return state
 
   const splitAces = hand.splitAces || first === 'A'
   const base = { fromSplit: true, splitAces, doubling: false }

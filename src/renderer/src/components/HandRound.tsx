@@ -85,7 +85,10 @@ export function HandRound({
     rodada não expressa (pedir, e a carta que fecha um dobrar); a contagem de
     cartas cobre este.
   */
-  const needsCard = awaitingCard || hand.cards.length < 2
+  // Uma mão que já dobrou está esperando a carta que fecha a dobra e não tem
+  // mais decisão nenhuma a tomar — sem isso um desfazer devolve o painel de
+  // decisão para uma mão em dobra.
+  const needsCard = awaitingCard || hand.cards.length < 2 || hand.doubling
 
   const decision =
     round.step === 'playing' && round.upcard !== null && !needsCard

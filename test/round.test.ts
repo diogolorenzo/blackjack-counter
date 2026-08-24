@@ -226,6 +226,16 @@ describe('separar', () => {
     const state = opened('10', '6', '9')
     expect(play(state, { type: 'split' })).toEqual(state)
   })
+
+  /**
+   * Igual ao guard de startDouble: uma mão que já dobrou não tem mais decisão
+   * a tomar. Sem isto um desfazer que devolve `doubling: true` ao painel de
+   * decisão poderia separar uma mão em dobra e apagar a dobra sozinho.
+   */
+  it('não separa uma mão que já dobrou', () => {
+    const doubled = play(opened('5', '5', '9'), { type: 'double' })
+    expect(play(doubled, { type: 'split' })).toEqual(doubled)
+  })
 })
 
 describe('desfazer e reiniciar', () => {
