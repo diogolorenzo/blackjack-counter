@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { planInstall } from '../src/main/updater/install'
+import { MAX_LOG_BYTES, formatLine, shouldRotate } from '../src/main/updater/log'
 import { shouldCheck, visibleStatus } from '../src/main/updater/policy'
 import type { UpdateState } from '../src/main/updater/policy'
 
@@ -94,5 +96,52 @@ describe('shouldCheck', () => {
     expect(
       shouldCheck({ ...idle, phase: 'checking', lastCheckAt: 1_000 }, 200_000, 300_000)
     ).toBe(false)
+  })
+})
+
+describe('planInstall', () => {
+  it('pasta gravável instala em silêncio', () => {
+    const plan = planInstall(true)
+    expect(plan.silent).toBe(true)
+    expect(plan.autoOnQuit).toBe(true)
+  })
+
+  /**
+   * Instalação para todos os usuários mora em Program Files e exige UAC. Como o
+   * `latest.yml` sai sem `isAdminRightsRequired` (o build é `perMachine: false`),
+   * o electron-updater dispara o instalador sem elevação: com `/S`, o NSIS pede
+   * UAC de janela escondida e desiste por `Quit` — o app fecha e nada é
+   * instalado. Sem `/S` o instalador aparece e o UAC tem onde ser respondido.
+   */
+  it('pasta não gravável mostra o instalador', () => {
+    expect(planInstall(false).silent).toBe(false)
+  })
+
+  /**
+   * O caminho que precisa de UAC não pode ficar no fechamento: seria um prompt
+   * escondido a cada vez que o app fecha, congelando a tela sem instalar nada.
+   */
+  it('pasta não gravável não instala sozinha no fechamento', () => {
+    expect(planInstall(false).autoOnQuit).toBe(false)
+  })
+})
+
+describe('log do updater', () => {
+  it('linha carimba horário e nível', () => {
+    expect(formatLine('info', 'oi', new Date('2026-01-02T03:04:05.000Z'))).toBe(
+      '2026-01-02T03:04:05.000Z [info] oi\n'
+    )
+  })
+
+  /** Erro sem stack ainda tem que dizer alguma coisa. */
+  it('erro vira stack ou mensagem', () => {
+    const semStack = new Error('falhou')
+    semStack.stack = undefined
+    expect(formatLine('error', semStack, new Date(0))).toContain('falhou')
+  })
+
+  it('rotaciona só quando a linha nova estoura o teto', () => {
+    expect(shouldRotate(MAX_LOG_BYTES - 10, 5)).toBe(false)
+    expect(shouldRotate(MAX_LOG_BYTES - 10, 20)).toBe(true)
   })
 })

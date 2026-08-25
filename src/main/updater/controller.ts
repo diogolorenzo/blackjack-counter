@@ -1,6 +1,11 @@
+import { unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 
+import { planInstall } from './install'
+import { createFileLogger } from './log'
 import { shouldCheck, visibleStatus } from './policy'
 import { createSimulatedUpdater, fakeVersionFrom } from './simulator'
 import type { UpdateState } from './policy'
@@ -22,6 +27,26 @@ const CHECK_INTERVAL_MS = 30 * 60 * 1000
  * compartilham a mesma política.
  */
 const MIN_CHECK_GAP_MS = 5 * 60 * 1000
+
+/**
+ * Escreve e apaga um arquivo dentro da pasta do executável para saber se dá
+ * para instalar por cima sem elevação.
+ *
+ * A pergunta é "este usuário grava aqui?", e no Windows `fs.access(W_OK)` não
+ * responde isso para diretório: ele olha o atributo somente-leitura, não a ACL,
+ * então diz que sim para `Program Files`. Tentar de verdade é o único teste
+ * honesto.
+ */
+function installDirIsWritable(): boolean {
+  const probe = join(dirname(app.getPath('exe')), '.counter-update-probe')
+  try {
+    writeFileSync(probe, '')
+    unlinkSync(probe)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export interface UpdaterController {
   install(): void
@@ -89,8 +114,17 @@ export function createUpdaterController(deps: {
     check()
   }
 
+  const logger = createFileLogger(join(app.getPath('userData'), 'updater.log'))
+  // Sem isto o electron-updater fala no console, que num app empacotado não
+  // existe. O arquivo é o que sobra para diagnosticar uma instalação que falhou.
+  autoUpdater.logger = logger
+
+  const plan = planInstall(installDirIsWritable())
+  logger.info(`Versão ${app.getVersion()} em ${app.getPath('exe')}`)
+  logger.info(`Plano de instalação: ${plan.reason}`)
+
   autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.autoInstallOnAppQuit = plan.autoOnQuit
 
   autoUpdater.on('update-available', (info) => {
     state.phase = 'downloading'
@@ -121,9 +155,11 @@ export function createUpdaterController(deps: {
   })
 
   // Falha de atualização nunca vira popup: o app tem que abrir e contar cartas
-  // mesmo offline ou com o GitHub fora do ar.
-  autoUpdater.on('error', () => {
+  // mesmo offline ou com o GitHub fora do ar. Fica no log, que é onde se procura
+  // depois — a tela do jogador não é lugar de erro de rede.
+  autoUpdater.on('error', (error) => {
     state.phase = 'error'
+    logger.error(error)
     emit()
   })
 
@@ -135,8 +171,9 @@ export function createUpdaterController(deps: {
   return {
     install: () => {
       if (state.phase !== 'ready') return
-      // Silencioso (sem o assistente do NSIS) e reabrindo o app depois.
-      autoUpdater.quitAndInstall(true, true)
+      logger.info(`Instalando ${state.version ?? '?'}: ${plan.reason}`)
+      // Reabre o app depois em qualquer um dos dois caminhos.
+      autoUpdater.quitAndInstall(plan.silent, true)
     },
     dismiss: () => {
       state.dismissed = true
@@ -150,7 +187,10 @@ export function createUpdaterController(deps: {
       firstCheck = null
       recheck = null
       app.removeListener('browser-window-focus', checkIfDue)
-      autoUpdater.removeAllListeners()
+      // Os listeners do autoUpdater ficam: `dispose` roda no `before-quit`, e é
+      // logo depois dele que a instalação no fechamento acontece. Sem o listener
+      // de 'error', uma falha ali vira 'error' sem ouvinte — que no EventEmitter
+      // do Node é exceção não tratada, no meio do encerramento.
     }
   }
 }

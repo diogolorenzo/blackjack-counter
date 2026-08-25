@@ -15,6 +15,14 @@ export interface ChangelogEntry {
  */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '0.4.1',
+    date: '2026-08-25',
+    changes: [
+      'Correção da atualização automática em quem instalou o app "para todos os usuários": o instalador agora aparece na tela em vez de pedir permissão numa janela escondida — era isso que travava o computador por alguns segundos e fechava o app sem instalar nada.',
+      'O updater agora guarda um log (updater.log, na pasta de dados do app), para uma falha de atualização deixar rastro em vez de sumir em silêncio.'
+    ]
+  },
+  {
     version: '0.4.0',
     date: '2026-08-24',
     changes: [
