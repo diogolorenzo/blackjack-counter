@@ -322,12 +322,54 @@ download acontece em segundo plano e é diferencial: uma versão nova não baixa
 
 Não existe mais diálogo nativo do Windows para isso. Enquanto baixa, uma pílula
 discreta aparece no rodapé da janela principal com o progresso; pronta, ela
-troca para um botão "Reiniciar", que reinstala em silêncio e reabre o app. A
-pílula é passiva — não interrompe, não rouba foco e pode ser dispensada no ×,
-que só esconde aquela pendência: a atualização já baixada entra sozinha no
-próximo fechamento de verdade (pela bandeja), dispensada ou não.
+troca para um botão "Reiniciar", que reinstala e reabre o app. A pílula é
+passiva — não interrompe, não rouba foco e pode ser dispensada no ×, que só
+esconde aquela pendência: numa instalação por usuário, a atualização já baixada
+entra sozinha no próximo fechamento de verdade (pela bandeja), dispensada ou
+não.
 
 Falha de rede não vira popup: sem internet o app abre e conta normalmente.
+
+### Por usuário ou para todos os usuários
+
+O instalador é o assistido (`oneClick: false`) e pergunta, na primeira
+instalação, se o app é só para você ou para todos os usuários da máquina. Essa
+escolha decide como a atualização é aplicada, e é a única parte do fluxo que não
+é igual para todo mundo:
+
+- **Só para mim** (`%LOCALAPPDATA%\Programs\counter`, o padrão): o usuário grava
+  na pasta do app, então o instalador roda em silêncio, sem nenhuma janela, e o
+  app reabre sozinho. É também o único caso em que a instalação acontece no
+  fechamento, sem passar pelo botão.
+- **Para todos** (`Program Files`): gravar ali exige UAC. O build é
+  `perMachine: false`, então o `latest.yml` sai sem `isAdminRightsRequired` e o
+  electron-updater dispara o instalador **sem** elevação. Rodar assim em
+  silêncio é o pior dos mundos: o NSIS chama `UAC_RunElevated` com a janela
+  escondida, a tela congela na ida para o desktop seguro, o prompt não tem onde
+  aparecer e o instalador sai por `Quit` — o app fecha e a versão antiga
+  continua instalada, sem erro nenhum na tela. Por isso, nesse caso, o
+  "Reiniciar" abre o instalador **visível**: o UAC vem junto e dá para concluir.
+
+Quem decide qual dos dois é o `planInstall` (`src/main/updater/install.ts`),
+a partir de um teste direto: escrever e apagar um arquivo dentro da pasta do
+executável. No Windows não dá para perguntar isso ao `fs.access(W_OK)` — para
+diretório ele olha o atributo somente-leitura, não a ACL, e responde que sim
+para `Program Files`.
+
+### Quando a atualização falha
+
+O updater escreve `updater.log` na pasta de dados do app
+(`%APPDATA%\counter\updater.log`, ou o caminho que o Windows der para
+`userData`), com o que ele checou, baixou e tentou instalar. Sem isso, uma
+instalação que falha some sem deixar rastro: o app fecha, volta na versão
+antiga, e não há console para olhar num app empacotado. O arquivo rotaciona para
+`.old` a cada 256 KB.
+
+Se a atualização automática travar de vez, a saída manual é sempre a mesma:
+baixar o `Counter-Setup-<versão>.exe` da
+[página de releases](https://github.com/diogolorenzo/blackjack-counter/releases)
+e rodar por cima. Ele reconhece a instalação existente e preserva contagem,
+sessões e configurações (que moram em `userData`, não na pasta do app).
 
 Em desenvolvimento (`npm run dev`) nada disso roda — não há app empacotado para
 atualizar. Para conferir o visual da pílula sem publicar uma release, a env var
