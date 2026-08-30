@@ -1,6 +1,6 @@
 {
   "name": "counter",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Contador de blackjack (Hi-Lo e KO) com hotkeys globais, overlay, desvios, treino e dimensionamento de banca",
   "main": "./out/main/index.js",
   "private": true,
