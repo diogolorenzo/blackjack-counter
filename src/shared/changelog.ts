@@ -15,6 +15,14 @@ export interface ChangelogEntry {
  */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '0.4.2',
+    date: '2026-08-30',
+    changes: [
+      'O overlay de decisão de mão e a aba Desvios agora usam os mesmos nomes de jogada em toda parte — antes o texto da jogada e o botão de clique podiam mostrar palavras diferentes para a mesma decisão.',
+      'Novo seletor de idioma para os nomes das jogadas, em Ajustes > Aparência: Português (Pedir, Ficar, Dobrar, Separar, Cashout) ou English (Ask, Stay, Double, Split, Cashout).'
+    ]
+  },
+  {
     version: '0.4.1',
     date: '2026-08-25',
     changes: [
