@@ -14,7 +14,8 @@ const defaults = {
   dealerFirst: false,
   showReason: true,
   autoResetSeconds: 0,
-  keypadDensity: 'comfortable' as const
+  keypadDensity: 'comfortable' as const,
+  language: 'pt' as const
 }
 
 const pick = (rank: string) => fireEvent.click(screen.getByRole('button', { name: `carta ${rank}` }))
@@ -29,7 +30,7 @@ describe('HandRound', () => {
     expect(screen.getByText('Dealer')).toBeTruthy()
 
     pick('10')
-    expect(screen.getByTestId('decision').textContent).toContain('pedir')
+    expect(screen.getByTestId('decision').textContent).toContain('Pedir')
   })
 
   it('com dealerFirst pede o upcard primeiro', () => {
@@ -43,7 +44,7 @@ describe('HandRound', () => {
     pick('10')
     pick('6')
     pick('10')
-    expect(screen.getByTestId('decision').textContent).toContain('parar')
+    expect(screen.getByTestId('decision').textContent).toContain('Ficar')
     expect(screen.getByTestId('reason').textContent).toContain('desvio')
   })
 
@@ -62,7 +63,7 @@ describe('HandRound', () => {
     pick('10')
     fireEvent.click(screen.getByRole('button', { name: 'Pedir' }))
     pick('3')
-    expect(screen.getByTestId('decision').textContent).toContain('parar')
+    expect(screen.getByTestId('decision').textContent).toContain('Ficar')
   })
 
   it('estourar encerra e oferece nova mão', () => {
@@ -167,7 +168,7 @@ describe('HandRound', () => {
     pick('6')
     expect(screen.queryByTestId('insurance')).toBe(null)
     pick('A')
-    expect(screen.getByTestId('insurance').textContent).toContain('fazer seguro')
+    expect(screen.getByTestId('insurance').textContent).toContain('Sim')
   })
 
   /**
@@ -180,6 +181,29 @@ describe('HandRound', () => {
     pick('10')
     pick('6')
     pick('10')
-    expect(screen.getByTestId('decision').textContent).toContain('pedir')
+    expect(screen.getByTestId('decision').textContent).toContain('Pedir')
+  })
+
+  /**
+   * O bug original: o texto grande da jogada lia um mapa e os botões liam
+   * outro, então a mesma jogada tinha dois nomes na tela. Este teste prova
+   * que os dois agora saem da mesma fonte — se algum dia voltarem a divergir,
+   * o botão "Stay" some e o clique quebra.
+   */
+  it('em inglês, o texto da jogada e o botão usam a mesma palavra', () => {
+    render(<HandRound {...defaults} language="en" decisionCount={3} />)
+    pick('10')
+    pick('6')
+    pick('10')
+    expect(screen.getByTestId('decision').textContent).toContain('Stay')
+    expect(screen.getByRole('button', { name: 'Stay' })).toBeTruthy()
+  })
+
+  it('em inglês, o seguro responde Yes/No', () => {
+    render(<HandRound {...defaults} language="en" insuranceOn />)
+    pick('10')
+    pick('6')
+    pick('A')
+    expect(screen.getByTestId('insurance').textContent).toContain('Yes')
   })
 })

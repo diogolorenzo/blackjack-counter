@@ -243,6 +243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   feedback: { sound: false, volume: 0.4, flash: true, drillSound: true },
   palette: 'default',
   deviationsLayout: 'list',
+  decisionLanguage: 'pt',
   bindingProfiles: emptyBindingProfiles(),
   overlay: {
     corner: 'top-right',

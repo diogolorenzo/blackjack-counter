@@ -67,6 +67,7 @@ export function StrategyOverlayApp() {
           showReason={settings.strategyOverlay.showReason}
           autoResetSeconds={settings.strategyOverlay.autoResetSeconds}
           keypadDensity={settings.strategyOverlay.keypadDensity}
+          language={settings.decisionLanguage}
         />
       </div>
 

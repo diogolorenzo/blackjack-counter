@@ -52,7 +52,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Desvios' }))
 
     expect(screen.getByText('12 de 22 valendo')).toBeDefined()
-    expect(screen.getByText('sem seguro')).toBeDefined()
+    expect(screen.getByText('Não')).toBeDefined()
   })
 
   it('aplica a carta pelo botão', async () => {
@@ -112,8 +112,8 @@ describe('matriz mão × dealer', () => {
     expect(screen.getByText('Mão dura')).toBeDefined()
     expect(screen.getByText('Par')).toBeDefined()
     // Legenda das letras em português.
-    expect(screen.getByText('pedir')).toBeDefined()
-    expect(screen.getByText('separar')).toBeDefined()
+    expect(screen.getByText('Pedir')).toBeDefined()
+    expect(screen.getByText('Separar')).toBeDefined()
   })
 
   it('a célula sabe a jogada do count atual', async () => {
@@ -124,8 +124,8 @@ describe('matriz mão × dealer', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Desvios' })).toBeDefined())
     fireEvent.click(screen.getByRole('button', { name: 'Desvios' }))
 
-    expect(screen.getByRole('button', { name: '12 contra 3: parar' })).toBeDefined()
-    expect(screen.getByRole('button', { name: '12 contra 2: pedir' })).toBeDefined()
+    expect(screen.getByRole('button', { name: '12 contra 3: Ficar' })).toBeDefined()
+    expect(screen.getByRole('button', { name: '12 contra 2: Pedir' })).toBeDefined()
   })
 
   it('clicar numa célula explica o índice dela', async () => {
@@ -134,7 +134,7 @@ describe('matriz mão × dealer', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Desvios' })).toBeDefined())
     fireEvent.click(screen.getByRole('button', { name: 'Desvios' }))
-    fireEvent.click(screen.getByRole('button', { name: '12 contra 2: pedir' }))
+    fireEvent.click(screen.getByRole('button', { name: '12 contra 2: Pedir' }))
 
     expect(screen.getByText(/12 vs 2/)).toBeDefined()
     expect(screen.getByText(/TC \+3/)).toBeDefined()
@@ -351,6 +351,19 @@ describe('ajustes do overlay de jogada', () => {
     fireEvent.click(within(grupo).getByRole('button', { name: 'G' }))
     expect(api.updateSettings).toHaveBeenCalledWith({
       strategyOverlay: { size: 'large', customSize: null }
+    })
+  })
+})
+
+describe('ajustes do idioma das jogadas', () => {
+  it('trocar para English emite o patch', async () => {
+    const api = stubApi(snapshot())
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajustes' }))
+    const grupo = await screen.findByRole('group', { name: 'Idioma das jogadas' })
+    fireEvent.click(within(grupo).getByRole('button', { name: 'English' }))
+    expect(api.updateSettings).toHaveBeenCalledWith({
+      decisionLanguage: 'en'
     })
   })
 })

@@ -290,6 +290,26 @@ describe('SessionController probe', () => {
   })
 })
 
+describe('sanitização do idioma das jogadas', () => {
+  it('settings antiga sem a chave ganha o default pt', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ shoe: { deckCount: 8 } }))
+    expect(new SettingsStore(p).get().decisionLanguage).toBe('pt')
+  })
+
+  it('aceita en', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ decisionLanguage: 'en' }))
+    expect(new SettingsStore(p).get().decisionLanguage).toBe('en')
+  })
+
+  it('valor inválido cai no default pt', () => {
+    const p = tmpFile()
+    writeFileSync(p, JSON.stringify({ decisionLanguage: 'es' }))
+    expect(new SettingsStore(p).get().decisionLanguage).toBe('pt')
+  })
+})
+
 describe('sanitização do overlay de jogada', () => {
   it('settings antiga sem a chave ganha os defaults', () => {
     const p = tmpFile()

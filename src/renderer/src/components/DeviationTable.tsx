@@ -9,7 +9,7 @@ import {
 } from '@shared/domain/deviations'
 import type { Deviation } from '@shared/domain/deviations'
 import { formatSigned } from '@shared/format'
-import type { CountingSystem, DeviationsLayout } from '@shared/types'
+import type { CountingSystem, DecisionLanguage, DeviationsLayout } from '@shared/types'
 
 import { StrategyMatrix } from '@/components/StrategyMatrix'
 
@@ -20,6 +20,7 @@ export interface DeviationTableProps {
   layout: DeviationsLayout
   surrender: boolean
   insuranceOn: boolean
+  language: DecisionLanguage
   onLayoutChange: (layout: DeviationsLayout) => void
 }
 
@@ -28,7 +29,15 @@ const LAYOUTS: readonly { value: DeviationsLayout; label: string }[] = [
   { value: 'matrix', label: 'Mão × dealer' }
 ]
 
-function Row({ deviation, count }: { deviation: Deviation; count: number }) {
+function Row({
+  deviation,
+  count,
+  language
+}: {
+  deviation: Deviation
+  count: number
+  language: DecisionLanguage
+}) {
   const active = isDeviationActive(deviation, count)
   const play = currentPlay(deviation, count)
 
@@ -51,13 +60,21 @@ function Row({ deviation, count }: { deviation: Deviation; count: number }) {
       <span
         className={`flex-1 truncate text-right text-[12px] ${active ? 'font-semibold text-pos' : 'text-muted'}`}
       >
-        {PLAY_LABELS[play]}
+        {PLAY_LABELS[language][play]}
       </span>
     </li>
   )
 }
 
-function DeviationList({ system, count }: { system: CountingSystem; count: number }) {
+function DeviationList({
+  system,
+  count,
+  language
+}: {
+  system: CountingSystem
+  count: number
+  language: DecisionLanguage
+}) {
   const rows = useMemo(() => sortForCount(deviationsForSystem(system), count), [system, count])
   const active = rows.filter((row) => isDeviationActive(row, count))
 
@@ -72,7 +89,7 @@ function DeviationList({ system, count }: { system: CountingSystem; count: numbe
 
       <ul className="flex flex-col gap-1">
         {rows.map((row) => (
-          <Row key={row.id} deviation={row} count={count} />
+          <Row key={row.id} deviation={row} count={count} language={language} />
         ))}
       </ul>
 
@@ -99,6 +116,7 @@ export function DeviationTable({
   layout,
   surrender,
   insuranceOn,
+  language,
   onLayoutChange
 }: DeviationTableProps) {
   if (deviationsForSystem(system).length === 0) {
@@ -133,9 +151,10 @@ export function DeviationTable({
           decisionCount={decisionCount}
           surrender={surrender}
           insuranceOn={insuranceOn}
+          language={language}
         />
       ) : (
-        <DeviationList system={system} count={decisionCount} />
+        <DeviationList system={system} count={decisionCount} language={language} />
       )}
     </div>
   )

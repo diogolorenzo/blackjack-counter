@@ -1,4 +1,4 @@
-import type { CountingSystem } from '../types'
+import type { CountingSystem, DecisionLanguage } from '../types'
 
 export type PlayAction =
   | 'hit'
@@ -26,14 +26,41 @@ export const PLAY_CODES: Record<PlayAction, string> = {
   noInsurance: '—'
 }
 
-export const PLAY_LABELS: Record<PlayAction, string> = {
-  hit: 'pedir',
-  stand: 'parar',
-  double: 'dobrar',
-  split: 'dividir',
-  surrender: 'render',
-  insurance: 'fazer seguro',
-  noInsurance: 'sem seguro'
+/**
+ * Uma jogada tinha dois nomes na mesma tela: o painel de decisão do overlay
+ * lia esta lista (minúscula, "parar") para o texto grande, mas os botões de
+ * clique eram strings soltas ("Ficar") — a mesma jogada com dois nomes
+ * diferentes no meio de uma mão. Agora os dois lêem daqui, e o mapa serve
+ * também a aba Desvios, para o vocabulário não divergir de novo entre as
+ * duas telas.
+ *
+ * `insurance`/`noInsurance` não são "fazer seguro"/"sem seguro" por escolha
+ * deliberada: a única exibição deles é sempre ao lado de um rótulo "Seguro"
+ * (ou "Insurance"), então a jogada em si é só a resposta — Sim/Não — sem
+ * repetir a palavra.
+ *
+ * Inglês existe como opção do usuário, não como padrão: o resto do app
+ * continua em português.
+ */
+export const PLAY_LABELS: Record<DecisionLanguage, Record<PlayAction, string>> = {
+  pt: {
+    hit: 'Pedir',
+    stand: 'Ficar',
+    double: 'Dobrar',
+    split: 'Separar',
+    surrender: 'Cashout',
+    insurance: 'Sim',
+    noInsurance: 'Não'
+  },
+  en: {
+    hit: 'Ask',
+    stand: 'Stay',
+    double: 'Double',
+    split: 'Split',
+    surrender: 'Cashout',
+    insurance: 'Yes',
+    noInsurance: 'No'
+  }
 }
 
 export interface Deviation {

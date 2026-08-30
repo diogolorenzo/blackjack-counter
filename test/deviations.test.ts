@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   DEVIATIONS,
+  PLAY_LABELS,
   currentPlay,
   deviationsForSystem,
   isDeviationActive,
   sortForCount
 } from '../src/shared/domain/deviations'
+import type { PlayAction } from '../src/shared/domain/deviations'
 
 function byId(id: string) {
   const found = DEVIATIONS.find((deviation) => deviation.id === id)
@@ -91,5 +93,51 @@ describe('escopo por sistema', () => {
   it('só existe para Hi-Lo: os índices do KO são outra escala', () => {
     expect(deviationsForSystem('hilo')).toHaveLength(DEVIATIONS.length)
     expect(deviationsForSystem('ko')).toHaveLength(0)
+  })
+})
+
+/**
+ * Guarda de completude: um PlayAction novo (ou um idioma novo) sem entrada
+ * aqui quebraria em silêncio — `PLAY_LABELS[language][action]` devolveria
+ * `undefined` e o botão apareceria vazio no meio de uma mão.
+ */
+describe('rótulos de jogada', () => {
+  const PLAY_ACTIONS: readonly PlayAction[] = [
+    'hit',
+    'stand',
+    'double',
+    'split',
+    'surrender',
+    'insurance',
+    'noInsurance'
+  ]
+
+  it('os dois idiomas cobrem toda ação', () => {
+    for (const language of ['pt', 'en'] as const) {
+      for (const action of PLAY_ACTIONS) {
+        expect(PLAY_LABELS[language][action]).toBeTruthy()
+      }
+    }
+  })
+
+  it('o texto da jogada e o botão são a mesma string, nos dois idiomas', () => {
+    expect(PLAY_LABELS.pt).toEqual({
+      hit: 'Pedir',
+      stand: 'Ficar',
+      double: 'Dobrar',
+      split: 'Separar',
+      surrender: 'Cashout',
+      insurance: 'Sim',
+      noInsurance: 'Não'
+    })
+    expect(PLAY_LABELS.en).toEqual({
+      hit: 'Ask',
+      stand: 'Stay',
+      double: 'Double',
+      split: 'Split',
+      surrender: 'Cashout',
+      insurance: 'Yes',
+      noInsurance: 'No'
+    })
   })
 })

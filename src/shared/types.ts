@@ -119,6 +119,13 @@ export type KeypadDensity = 'compact' | 'comfortable'
 export type DeviationsLayout = 'list' | 'matrix'
 
 /**
+ * Idioma dos nomes de jogada (pedir/ficar/dobrar/separar/cashout/seguro),
+ * usados no overlay de decisão por mão e na aba Desvios. Não é o idioma do
+ * app — o resto da interface continua em português.
+ */
+export type DecisionLanguage = 'pt' | 'en'
+
+/**
  * Um jogo de teclas salvo pelo usuário.
  *
  * `bindings` null = slot vazio. Os slots existem sempre (nunca somem da UI)
@@ -219,6 +226,7 @@ export interface Settings {
   feedback: FeedbackSettings
   palette: Palette
   deviationsLayout: DeviationsLayout
+  decisionLanguage: DecisionLanguage
   /** Slots de teclas salvos pelo usuário. Tamanho fixo. */
   bindingProfiles: BindingProfile[]
   overlay: OverlaySettings

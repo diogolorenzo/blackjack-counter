@@ -42,7 +42,7 @@ describe('StrategyOverlayApp', () => {
     pick('10')
     pick('6')
     pick('10')
-    expect(screen.getByTestId('decision').textContent).toContain('pedir')
+    expect(screen.getByTestId('decision').textContent).toContain('Pedir')
   })
 
   /*

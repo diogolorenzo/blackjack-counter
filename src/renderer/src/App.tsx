@@ -224,6 +224,7 @@ export function App() {
             layout={settings.deviationsLayout}
             surrender={settings.shoe.surrender}
             insuranceOn={derived.insuranceOn}
+            language={settings.decisionLanguage}
             onLayoutChange={(deviationsLayout) => patch({ deviationsLayout })}
           />
         </div>
