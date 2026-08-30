@@ -10,6 +10,7 @@ import {
 import type { HandKind, Upcard } from '@shared/domain/basicStrategy'
 import { PLAY_CODES, PLAY_LABELS, deviationsForCell } from '@shared/domain/deviations'
 import type { PlayAction } from '@shared/domain/deviations'
+import type { DecisionLanguage } from '@shared/types'
 
 export interface StrategyGridProps {
   /** True count arredondado — o mesmo número que indexa o bet spread. */
@@ -22,6 +23,7 @@ export interface StrategyGridProps {
   compact?: boolean
   selected?: { handKey: string; upcard: Upcard } | null
   onSelect?: (cell: { handKey: string; upcard: Upcard } | null) => void
+  language?: DecisionLanguage
 }
 
 const KIND_ORDER: readonly HandKind[] = ['hard', 'soft', 'pair']
@@ -43,8 +45,10 @@ export function StrategyGrid({
   countAware,
   compact = false,
   selected = null,
-  onSelect
+  onSelect,
+  language = 'pt'
 }: StrategyGridProps) {
+  const labels = PLAY_LABELS[language]
   const rules = useMemo(() => ({ surrender }), [surrender])
 
   const grid = useMemo(() => {
@@ -112,7 +116,7 @@ export function StrategyGrid({
                   const isSelected =
                     selected?.handKey === line.row.id && selected.upcard === cell.upcard
 
-                  const label = `${line.row.label} contra ${cell.upcard}: ${PLAY_LABELS[action]}`
+                  const label = `${line.row.label} contra ${cell.upcard}: ${labels[action]}`
                   const cellClass = `tnum relative flex w-full items-center justify-center rounded-[3px] border font-semibold transition-colors duration-100 ${
                     compact ? 'h-4' : 'h-5'
                   } ${

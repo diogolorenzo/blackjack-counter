@@ -219,8 +219,8 @@ export function HelpPanel({ settings, onNavigate }: HelpPanelProps) {
         <p>
           As letras são <b className="text-fg">P</b>edir, <b className="text-fg">F</b>icar,{' '}
           <b className="text-fg">D</b>obrar, <b className="text-fg">S</b>eparar e{' '}
-          <b className="text-fg">R</b>ender. Célula verde é jogada que a contagem mudou agora; o
-          ponto cinza marca as células que a contagem pode mudar.
+          <b className="text-fg">R</b> (Cashout). Célula verde é jogada que a contagem mudou agora;
+          o ponto cinza marca as células que a contagem pode mudar.
         </p>
         <p>
           Dobrar e separar valem só nas duas primeiras cartas. Se você já pediu carta, "dobrar" vira

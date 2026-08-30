@@ -23,6 +23,7 @@ import type {
   Corner,
   CountingSystem,
   CurrencySettings,
+  DecisionLanguage,
   DeviationsLayout,
   FeedbackSettings,
   HotkeyAction,
@@ -44,6 +45,7 @@ const ROUNDING_MODES: readonly TrueCountRounding[] = ['floor', 'nearest']
 const SYSTEMS: readonly CountingSystem[] = ['hilo', 'ko']
 const PALETTES: readonly Palette[] = ['default', 'colorblind']
 const DEVIATIONS_LAYOUTS: readonly DeviationsLayout[] = ['list', 'matrix']
+const DECISION_LANGUAGES: readonly DecisionLanguage[] = ['pt', 'en']
 
 /** Nome de perfil não é dado estruturado: cortar evita um settings.json gigante. */
 const PROFILE_NAME_MAX = 24
@@ -360,6 +362,11 @@ function sanitizeSettings(raw: unknown): Settings {
       merged.deviationsLayout,
       DEVIATIONS_LAYOUTS,
       DEFAULT_SETTINGS.deviationsLayout
+    ),
+    decisionLanguage: pickEnum(
+      merged.decisionLanguage,
+      DECISION_LANGUAGES,
+      DEFAULT_SETTINGS.decisionLanguage
     ),
     bindingProfiles: sanitizeBindingProfiles(merged.bindingProfiles),
     overlay: sanitizeOverlay(merged.overlay),

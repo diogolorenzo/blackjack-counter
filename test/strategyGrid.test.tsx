@@ -10,13 +10,19 @@ describe('StrategyGrid', () => {
   it('em TC 0 manda ficar em 16 vs 10, que é o desvio mais famoso', () => {
     render(<StrategyGrid decisionCount={0} surrender countAware />)
     const cell = screen.getByRole('img', { name: /^16 contra 10:/ })
-    expect(cell.getAttribute('aria-label')).toContain('parar')
+    expect(cell.getAttribute('aria-label')).toContain('Ficar')
+  })
+
+  it('em inglês, a mesma célula lê "Stay"', () => {
+    render(<StrategyGrid decisionCount={0} surrender countAware language="en" />)
+    const cell = screen.getByRole('img', { name: /^16 contra 10:/ })
+    expect(cell.getAttribute('aria-label')).toContain('Stay')
   })
 
   it('em TC -1 volta a pedir em 16 vs 10 numa mesa sem rendição', () => {
     render(<StrategyGrid decisionCount={-1} surrender={false} countAware />)
     const cell = screen.getByRole('img', { name: /^16 contra 10:/ })
-    expect(cell.getAttribute('aria-label')).toContain('pedir')
+    expect(cell.getAttribute('aria-label')).toContain('Pedir')
   })
 
   /**
@@ -28,7 +34,7 @@ describe('StrategyGrid', () => {
   it('com rendição na mesa, 16 vs 10 abaixo do índice é render', () => {
     render(<StrategyGrid decisionCount={-1} surrender countAware />)
     const cell = screen.getByRole('img', { name: /^16 contra 10:/ })
-    expect(cell.getAttribute('aria-label')).toContain('render')
+    expect(cell.getAttribute('aria-label')).toContain('Cashout')
   })
 
   /**
@@ -38,13 +44,13 @@ describe('StrategyGrid', () => {
   it('sem countAware ignora a contagem e mostra só a básica', () => {
     render(<StrategyGrid decisionCount={8} surrender={false} countAware={false} />)
     const cell = screen.getByRole('img', { name: /^16 contra 10:/ })
-    expect(cell.getAttribute('aria-label')).toContain('pedir')
+    expect(cell.getAttribute('aria-label')).toContain('Pedir')
   })
 
   it('sem rendição na mesa, 16 vs A vira pedir e não render', () => {
     render(<StrategyGrid decisionCount={0} surrender={false} countAware />)
     const cell = screen.getByRole('img', { name: /^16 contra A:/ })
-    expect(cell.getAttribute('aria-label')).toContain('pedir')
+    expect(cell.getAttribute('aria-label')).toContain('Pedir')
   })
 
   /**

@@ -3,7 +3,9 @@ import { useMemo, useState } from 'react'
 import { HAND_ROWS, activeCells, cellDecision } from '@shared/domain/basicStrategy'
 import type { Upcard } from '@shared/domain/basicStrategy'
 import { PLAY_LABELS } from '@shared/domain/deviations'
+import type { PlayAction } from '@shared/domain/deviations'
 import { formatSigned } from '@shared/format'
+import type { DecisionLanguage } from '@shared/types'
 
 import { StrategyGrid } from './StrategyGrid'
 
@@ -14,6 +16,7 @@ export interface StrategyMatrixProps {
   surrender: boolean
   /** Seguro está indicado no count atual? Vem do derivado, para não recalcular o índice aqui. */
   insuranceOn: boolean
+  language: DecisionLanguage
 }
 
 interface Selection {
@@ -25,16 +28,22 @@ interface Selection {
 const rowLabel = (handKey: string): string =>
   HAND_ROWS.find((row) => row.id === handKey)?.label ?? handKey
 
-export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: StrategyMatrixProps) {
+export function StrategyMatrix({
+  decisionCount,
+  surrender,
+  insuranceOn,
+  language
+}: StrategyMatrixProps) {
   const [selected, setSelected] = useState<Selection | null>(null)
   const rules = useMemo(() => ({ surrender }), [surrender])
+  const labels = PLAY_LABELS[language]
 
   const changed = useMemo(
     () => activeCells(decisionCount, rules).length,
     [decisionCount, rules]
   )
 
-  const detail = selected === null ? null : buildDetail(selected, decisionCount, rules)
+  const detail = selected === null ? null : buildDetail(selected, decisionCount, rules, labels)
 
   return (
     <div className="flex flex-col gap-2">
@@ -50,9 +59,9 @@ export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: Strate
           insuranceOn ? 'border-warn/50 bg-warn/10 text-warn' : 'border-border bg-surface text-muted'
         }`}
       >
-        <span>Seguro contra ás</span>
+        <span>{language === 'en' ? 'Insurance vs ace' : 'Seguro contra ás'}</span>
         <span className="font-semibold">
-          {insuranceOn ? PLAY_LABELS.insurance : PLAY_LABELS.noInsurance}
+          {insuranceOn ? labels.insurance : labels.noInsurance}
         </span>
       </div>
 
@@ -63,6 +72,7 @@ export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: Strate
           countAware
           selected={selected}
           onSelect={setSelected}
+          language={language}
         />
       </div>
 
@@ -79,19 +89,19 @@ export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: Strate
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
         <span>
-          <b className="text-fg">P</b> pedir
+          <b className="text-fg">P</b> {labels.hit}
         </span>
         <span>
-          <b className="text-fg">F</b> ficar
+          <b className="text-fg">F</b> {labels.stand}
         </span>
         <span>
-          <b className="text-warn">D</b> dobrar
+          <b className="text-warn">D</b> {labels.double}
         </span>
         <span>
-          <b className="text-pos">S</b> separar
+          <b className="text-pos">S</b> {labels.split}
         </span>
         <span>
-          <b className="text-neg">R</b> render
+          <b className="text-neg">R</b> {labels.surrender}
         </span>
       </div>
 
@@ -108,13 +118,14 @@ export function StrategyMatrix({ decisionCount, surrender, insuranceOn }: Strate
 function buildDetail(
   selection: Selection,
   count: number,
-  rules: { surrender: boolean }
+  rules: { surrender: boolean },
+  labels: Record<PlayAction, string>
 ): string {
   const decision = cellDecision(selection.handKey, selection.upcard, count, rules)
   if (decision === null) return ''
 
   const label = rowLabel(selection.handKey)
-  const head = `${label} vs ${selection.upcard}: ${PLAY_LABELS[decision.action]}`
+  const head = `${label} vs ${selection.upcard}: ${labels[decision.action]}`
   if (decision.index === null) return `${head} — estratégia básica, a contagem não muda esta mão.`
 
   const missing = decision.distance

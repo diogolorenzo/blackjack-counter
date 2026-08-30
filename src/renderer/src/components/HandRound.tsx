@@ -7,7 +7,7 @@ import { decideHand } from '@shared/domain/handDecision'
 import { initialRound, roundReducer } from '@shared/domain/round'
 import type { HandStatus } from '@shared/domain/round'
 import { formatSigned } from '@shared/format'
-import type { CountingSystem, KeypadDensity } from '@shared/types'
+import type { CountingSystem, DecisionLanguage, KeypadDensity } from '@shared/types'
 
 import { DecisionPanel } from '@/components/DecisionPanel'
 import { HandStrip } from '@/components/HandStrip'
@@ -23,6 +23,7 @@ export interface HandRoundProps {
   /** Segundos até limpar a rodada encerrada sozinha. 0 = manual. */
   autoResetSeconds: number
   keypadDensity: KeypadDensity
+  language: DecisionLanguage
 }
 
 const STATUS_TEXT: Record<HandStatus, string> = {
@@ -42,8 +43,10 @@ export function HandRound({
   dealerFirst,
   showReason,
   autoResetSeconds,
-  keypadDensity
+  keypadDensity,
+  language
 }: HandRoundProps) {
+  const labels = PLAY_LABELS[language]
   const [round, dispatch] = useReducer(roundReducer, dealerFirst, initialRound)
 
   /*
@@ -137,9 +140,9 @@ export function HandRound({
             insuranceOn ? 'bg-warn/15 text-warn' : 'text-muted'
           }`}
         >
-          <span>Seguro</span>
+          <span>{language === 'en' ? 'Insurance' : 'Seguro'}</span>
           <span className="font-semibold">
-            {insuranceOn ? PLAY_LABELS.insurance : PLAY_LABELS.noInsurance}
+            {insuranceOn ? labels.insurance : labels.noInsurance}
           </span>
         </div>
       )}
@@ -171,6 +174,7 @@ export function HandRound({
           decision={decision}
           showReason={showReason}
           decisionCount={decisionCount}
+          language={language}
           onHit={() => {
             setAwaitingCard(true)
             setHitPending(true)

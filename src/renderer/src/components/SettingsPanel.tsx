@@ -799,6 +799,21 @@ export function SettingsPanel({ settings, hotkeyStatus, onPatch }: SettingsPanel
             onSelect={(palette) => onPatch({ palette })}
           />
         </Field>
+
+        <Field
+          label="Idioma das jogadas"
+          hint="Pedir/Ficar/Dobrar/Separar/Cashout, no overlay e na aba Desvios"
+        >
+          <Segmented
+            value={settings.decisionLanguage}
+            options={[
+              { value: 'pt', label: 'Português' },
+              { value: 'en', label: 'English' }
+            ]}
+            label="Idioma das jogadas"
+            onSelect={(decisionLanguage) => onPatch({ decisionLanguage })}
+          />
+        </Field>
       </Section>
 
       <Section title="Atalhos globais">
